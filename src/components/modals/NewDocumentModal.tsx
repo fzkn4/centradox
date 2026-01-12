@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuthStore } from '@/lib/store'
 
 interface NewDocumentModalProps {
@@ -11,6 +11,7 @@ interface NewDocumentModalProps {
 
 export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocumentModalProps) {
   const { token } = useAuthStore()
+  const titleInputRef = useRef<HTMLInputElement>(null)
   const [formData, setFormData] = useState({
     title: '',
     type: 'Proposal'
@@ -19,6 +20,22 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
   const [dragActive, setDragActive] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (isOpen && titleInputRef.current) {
+      titleInputRef.current.focus()
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose()
+      }
+    }
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [isOpen, onClose])
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault()
@@ -133,7 +150,16 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 backdrop-blur-lg overflow-y-auto h-full w-full z-50" onClick={onClose}>
+    <div
+      className="fixed inset-0 backdrop-blur-sm overflow-y-auto h-full w-full z-50"
+      onClick={onClose}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          onClose()
+        }
+      }}
+      tabIndex={-1}
+    >
       <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white" onClick={(e) => e.stopPropagation()}>
         <div className="mt-3">
           <div className="flex justify-between items-center mb-4">
@@ -148,11 +174,11 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
             </button>
           </div>
 
-          {error && (
-            <div className="bg-red-50 text-red-800 p-4 rounded-md mb-4">
-              {error}
-            </div>
-          )}
+           {error && (
+             <div id="error-message" className="bg-red-50 text-red-800 p-4 rounded-md mb-4">
+               {error}
+             </div>
+           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -160,27 +186,29 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
                 <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
                   Document Title
                 </label>
-                <input
-                  id="title"
-                  type="text"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  placeholder="Enter document title"
-                />
+                 <input
+                   ref={titleInputRef}
+                   id="title"
+                   type="text"
+                   value={formData.title}
+                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                   required
+                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
+                   placeholder="Enter document title"
+                   aria-describedby={error ? "error-message" : undefined}
+                 />
               </div>
 
               <div>
                 <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">
                   Document Type
                 </label>
-                <select
-                  id="type"
-                  value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                >
+                 <select
+                   id="type"
+                   value={formData.type}
+                   onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
+                 >
                   <option value="Proposal">Proposal</option>
                   <option value="Report">Report</option>
                   <option value="Contract">Contract</option>
