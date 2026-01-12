@@ -150,7 +150,14 @@ export default function DepartmentManagementPage() {
   }
 
   const handleDeleteDepartment = async (departmentId: string) => {
-    if (!confirm('Are you sure you want to delete this department?')) return
+    const department = departments.find(d => d.id === departmentId)
+    const hasUsers = department && department._count.users > 0
+
+    const message = hasUsers
+      ? `Are you sure you want to delete this department? This will remove the department assignment from ${department._count.users} user${department._count.users !== 1 ? 's' : ''}.`
+      : 'Are you sure you want to delete this department?'
+
+    if (!confirm(message)) return
 
     try {
       const response = await fetch(`/api/admin/departments/${departmentId}`, {
@@ -287,7 +294,7 @@ export default function DepartmentManagementPage() {
                              handleDeleteDepartment(department.id)
                            }}
                            className="text-red-600 hover:text-red-900"
-                           disabled={department._count.users > 0 || department._count.workflowSteps > 0}
+                            disabled={department._count.workflowSteps > 0}
                          >
                            Delete
                          </button>

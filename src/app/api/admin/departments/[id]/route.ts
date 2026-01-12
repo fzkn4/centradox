@@ -134,6 +134,8 @@ export async function DELETE(
 
     const { id } = await params
 
+    console.log('Attempting to delete department:', id)
+
     const department = await prisma.department.findUnique({
       where: { id },
       include: {
@@ -147,31 +149,123 @@ export async function DELETE(
     })
 
     if (!department) {
+      console.log('Department not found:', id)
       return NextResponse.json({ error: 'Department not found' }, { status: 404 })
     }
 
-    // Check if department has users or workflow steps
-    if (department._count.users > 0) {
-      return NextResponse.json(
-        { error: 'Cannot delete department that has assigned users' },
-        { status: 400 }
-      )
-    }
+    console.log('Department found:', department.name, 'users:', department._count.users, 'workflow steps:', department._count.workflowSteps)
 
+    // Check if department is used in active workflow steps
     if (department._count.workflowSteps > 0) {
+      console.log('Cannot delete - has workflow steps')
       return NextResponse.json(
         { error: 'Cannot delete department that is used in workflow steps' },
         { status: 400 }
       )
     }
 
-    await prisma.department.delete({
-      where: { id }
-    })
+    // Use raw SQL to delete the department and clean up relations
+    // This is more reliable for many-to-many relations in SQLite
+    console.log('Using raw SQL approach for department deletion...')
+
+    try {
+      // Delete from the junction table first, then from departments table
+      await prisma.$executeRaw`
+        DELETE FROM _UserDepartments WHERE B = ${id}
+      `
+
+      console.log('Cleaned up user-department relations')
+
+      // Now delete the department
+      await prisma.department.delete({
+        where: { id }
+      })
+
+      console.log('Department deleted successfully')
+    } catch (rawSqlError) {
+      console.error('Raw SQL deletion failed:', rawSqlError)
+
+      // Fallback to the Prisma relation approach
+      try {
+        console.log('Trying Prisma relation cleanup...')
+
+        // Find users with this department
+        const usersWithDepartment = await prisma.user.findMany({
+          where: {
+            departments: {
+              some: {
+                id: id
+              }
+            }
+          },
+          select: {
+            id: true
+          }
+        })
+
+        console.log(`Found ${usersWithDepartment.length} users with this department`)
+
+        // Use transaction to update all users and delete department
+        await prisma.$transaction(async (tx: any) => {
+          // Update each user to remove this department
+          for (const user of usersWithDepartment) {
+            await tx.user.update({
+              where: { id: user.id },
+              data: {
+                departments: {
+                  set: [] // Clear all departments, then we'll handle this properly
+                }
+              }
+            })
+
+            // Reconnect all other departments (this is a workaround)
+            const userWithDepartments = await tx.user.findUnique({
+              where: { id: user.id },
+              select: {
+                departments: {
+                  where: {
+                    id: {
+                      not: id
+                    }
+                  },
+                  select: {
+                    id: true
+                  }
+                }
+              }
+            })
+
+            if (userWithDepartments && userWithDepartments.departments.length > 0) {
+              await tx.user.update({
+                where: { id: user.id },
+                data: {
+                  departments: {
+                    set: userWithDepartments.departments
+                  }
+                }
+              })
+            }
+          }
+
+          // Delete the department
+          await tx.department.delete({
+            where: { id }
+          })
+        })
+
+        console.log('Department deleted via Prisma transaction fallback')
+      } catch (prismaError) {
+        console.error('Prisma fallback also failed:', prismaError)
+        throw prismaError
+      }
+    }
 
     return NextResponse.json({ message: 'Department deleted successfully' })
   } catch (error) {
     console.error('Error deleting department:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
   }
 }
