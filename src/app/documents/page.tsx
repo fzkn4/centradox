@@ -9,27 +9,15 @@ import { Layout } from '@/components/layout/Layout'
 import { AdminLayout } from '@/components/layout/AdminLayout'
 import { NewDocumentModal } from '@/components/modals/NewDocumentModal'
 
-export default function DashboardPage() {
+export default function AllDocumentsPage() {
   const { user, isAuthenticated, token, isHydrated } = useAuthStore()
   const { documents, setDocuments, setLoading, isLoading } = useDocumentStore()
-  const [filter, setFilter] = useState('all')
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   const loadDocuments = useCallback(async () => {
     setLoading(true)
     try {
-      let url = '/api/documents'
-      const params = new URLSearchParams()
-
-      if (filter === 'my') {
-        params.append('myDocs', 'true')
-      } else if (filter !== 'all') {
-        params.append('status', filter)
-      }
-
-      if (params.toString()) {
-        url += `?${params.toString()}`
-      }
+      const url = '/api/documents'
 
       const response = await fetch(url, {
         headers: {
@@ -46,7 +34,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [filter, token, setLoading, setDocuments])
+  }, [token, setLoading, setDocuments])
 
   useEffect(() => {
     if (isHydrated && !isAuthenticated) {
@@ -58,15 +46,13 @@ export default function DashboardPage() {
     }
   }, [isAuthenticated, isHydrated, loadDocuments])
 
-
-
   const LayoutComponent = user?.role === 'ADMIN' ? AdminLayout : Layout
 
   return (
     <LayoutComponent>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900">All Documents</h1>
           <button
             onClick={() => setIsModalOpen(true)}
             className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700"
@@ -76,59 +62,6 @@ export default function DashboardPage() {
         </div>
 
         <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="flex space-x-2 mb-6">
-            <button
-              onClick={() => setFilter('all')}
-              className={`px-4 py-2 rounded-md text-sm font-medium ${
-                filter === 'all'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              All Documents
-            </button>
-            <button
-              onClick={() => setFilter('my')}
-              className={`px-4 py-2 rounded-md text-sm font-medium ${
-                filter === 'my'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              My Documents
-            </button>
-            <button
-              onClick={() => setFilter('DRAFT')}
-              className={`px-4 py-2 rounded-md text-sm font-medium ${
-                filter === 'DRAFT'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Draft
-            </button>
-            <button
-              onClick={() => setFilter('FOR_REVIEW')}
-              className={`px-4 py-2 rounded-md text-sm font-medium ${
-                filter === 'FOR_REVIEW'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              For Review
-            </button>
-            <button
-              onClick={() => setFilter('APPROVED')}
-              className={`px-4 py-2 rounded-md text-sm font-medium ${
-                filter === 'APPROVED'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Approved
-            </button>
-          </div>
-
           {isLoading ? (
             <div className="text-center py-8 text-gray-500">Loading documents...</div>
           ) : documents.length === 0 ? (

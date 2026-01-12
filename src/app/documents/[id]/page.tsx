@@ -5,6 +5,7 @@ import { useAuthStore, useDocumentStore } from '@/lib/store'
 import { getStatusColor, getStatusLabel } from '@/lib/permissions'
 import { format } from 'date-fns'
 import { Layout } from '@/components/layout/Layout'
+import { AdminLayout } from '@/components/layout/AdminLayout'
 import Link from 'next/link'
 
 interface DocumentVersion {
@@ -80,6 +81,8 @@ export default function DocumentViewPage({ params }: { params: Promise<{ id: str
       loadComments()
     }
   }, [isAuthenticated, isHydrated, loadDocument, loadComments])
+
+  const LayoutComponent = user?.role === 'ADMIN' ? AdminLayout : Layout
 
   const handleDownload = async (version: DocumentVersion) => {
     try {
@@ -251,7 +254,7 @@ export default function DocumentViewPage({ params }: { params: Promise<{ id: str
   const isAssignedToStep = currentStep?.assignedToId === user?.id
 
   return (
-    <Layout>
+    <LayoutComponent>
       <div className="space-y-6">
         <div className="flex justify-between items-start">
           <div>
@@ -569,6 +572,6 @@ export default function DocumentViewPage({ params }: { params: Promise<{ id: str
           </div>
         </div>
       </div>
-    </Layout>
+    </LayoutComponent>
   )
 }

@@ -2,11 +2,15 @@
 
 import { useState } from 'react'
 import { useAuthStore } from '@/lib/store'
-import { Layout } from '@/components/layout/Layout'
-import Link from 'next/link'
 
-export default function NewDocumentPage() {
-  const { user, isAuthenticated, isHydrated } = useAuthStore()
+interface NewDocumentModalProps {
+  isOpen: boolean
+  onClose: () => void
+  onDocumentCreated: () => void
+}
+
+export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocumentModalProps) {
+  const { token } = useAuthStore()
   const [formData, setFormData] = useState({
     title: '',
     type: 'Proposal'
@@ -15,24 +19,6 @@ export default function NewDocumentPage() {
   const [dragActive, setDragActive] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-
-  if (!isHydrated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!isAuthenticated) {
-    if (typeof window !== 'undefined') {
-      window.location.href = '/login'
-    }
-    return null
-  }
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault()
@@ -80,7 +66,7 @@ export default function NewDocumentPage() {
       const response = await fetch('/api/documents', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${useAuthStore.getState().token}`
+          'Authorization': `Bearer ${token}`
         },
         body: formDataToSend
       })
@@ -91,7 +77,11 @@ export default function NewDocumentPage() {
         throw new Error(data.error || 'Failed to create document')
       }
 
-      window.location.href = `/documents/${data.document.id}`
+      onDocumentCreated()
+      onClose()
+      // Reset form
+      setFormData({ title: '', type: 'Proposal' })
+      setFile(null)
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -140,30 +130,34 @@ export default function NewDocumentPage() {
     )
   }
 
-  return (
-    <Layout>
-      <div className="max-w-4xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">New Document</h1>
-          <Link
-            href="/dashboard"
-            className="text-gray-600 hover:text-gray-900"
-          >
-            Back to Dashboard
-          </Link>
-        </div>
+  if (!isOpen) return null
 
-        <div className="bg-white rounded-lg shadow-sm p-8">
+  return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 backdrop-blur-lg overflow-y-auto h-full w-full z-50" onClick={onClose}>
+      <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white" onClick={(e) => e.stopPropagation()}>
+        <div className="mt-3">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-medium text-gray-900">New Document</h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
           {error && (
-            <div className="bg-red-50 text-red-800 p-4 rounded-md mb-6">
+            <div className="bg-red-50 text-red-800 p-4 rounded-md mb-4">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
                   Document Title
                 </label>
                 <input
@@ -172,20 +166,20 @@ export default function NewDocumentPage() {
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   placeholder="Enter document title"
                 />
               </div>
 
               <div>
-                <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">
                   Document Type
                 </label>
                 <select
                   id="type"
                   value={formData.type}
                   onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 >
                   <option value="Proposal">Proposal</option>
                   <option value="Report">Report</option>
@@ -198,7 +192,7 @@ export default function NewDocumentPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Upload File
               </label>
               <div
@@ -206,7 +200,7 @@ export default function NewDocumentPage() {
                 onDragLeave={handleDrag}
                 onDragOver={handleDrag}
                 onDrop={handleDrop}
-                className={`border-2 border-dashed rounded-lg p-8 text-center transition-all ${
+                className={`border-2 border-dashed rounded-lg p-6 text-center transition-all ${
                   dragActive
                     ? 'border-indigo-500 bg-indigo-50'
                     : 'border-gray-300 hover:border-indigo-400'
@@ -243,16 +237,16 @@ export default function NewDocumentPage() {
                     </div>
                   ) : (
                     <div>
-                      <svg className="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-12 h-12 mx-auto mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                       </svg>
-                      <p className="text-sm text-gray-600 mb-2">
+                      <p className="text-sm text-gray-600 mb-1">
                         Drag and drop your file here, or
                       </p>
                       <p className="text-sm font-medium text-indigo-600 hover:text-indigo-800">
                         browse to choose a file
                       </p>
-                      <p className="text-xs text-gray-400 mt-2">
+                      <p className="text-xs text-gray-400 mt-1">
                         Supported formats: PDF, DOC, DOCX, XLS, XLSX, TXT, RTF
                       </p>
                     </div>
@@ -261,21 +255,22 @@ export default function NewDocumentPage() {
               </div>
             </div>
 
-            <div className="flex justify-end space-x-3">
-              <Link
-                href="/dashboard"
-                className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all"
+            <div className="flex justify-end space-x-3 pt-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
               >
                 Cancel
-              </Link>
+              </button>
               <button
                 type="submit"
                 disabled={loading || !file}
-                className="px-8 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium"
+                className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <span className="flex items-center">
-                    <svg className="animate-spin -ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
@@ -289,6 +284,6 @@ export default function NewDocumentPage() {
           </form>
         </div>
       </div>
-    </Layout>
+    </div>
   )
 }
