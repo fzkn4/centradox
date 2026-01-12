@@ -24,7 +24,7 @@ interface DocumentVersion {
 
 export default function DocumentViewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const { user, isAuthenticated, token } = useAuthStore()
+  const { user, isAuthenticated, token, isHydrated } = useAuthStore()
   const { currentDocument, setCurrentDocument, setLoading } = useDocumentStore()
   const [comment, setComment] = useState('')
   const [loading, setLoadingLocal] = useState(false)
@@ -71,13 +71,15 @@ export default function DocumentViewPage({ params }: { params: Promise<{ id: str
   }, [id, token])
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (isHydrated && !isAuthenticated) {
       window.location.href = '/login'
       return
     }
-    loadDocument()
-    loadComments()
-  }, [isAuthenticated, loadDocument, loadComments])
+    if (isHydrated && isAuthenticated) {
+      loadDocument()
+      loadComments()
+    }
+  }, [isAuthenticated, isHydrated, loadDocument, loadComments])
 
   const handleDownload = async (version: DocumentVersion) => {
     try {
@@ -230,11 +232,14 @@ export default function DocumentViewPage({ params }: { params: Promise<{ id: str
     )
   }
 
-  if (!isAuthenticated || !currentDocument) {
+  if (!isHydrated || !isAuthenticated || !currentDocument) {
     return (
-      <Layout>
-        <div className="text-center py-8">Loading...</div>
-      </Layout>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
     )
   }
 

@@ -6,7 +6,7 @@ import { Layout } from '@/components/layout/Layout'
 import Link from 'next/link'
 
 export default function NewDocumentPage() {
-  const { user, isAuthenticated } = useAuthStore()
+  const { user, isAuthenticated, isHydrated } = useAuthStore()
   const [formData, setFormData] = useState({
     title: '',
     type: 'Proposal'
@@ -15,6 +15,17 @@ export default function NewDocumentPage() {
   const [dragActive, setDragActive] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  if (!isHydrated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
 
   if (!isAuthenticated) {
     if (typeof window !== 'undefined') {

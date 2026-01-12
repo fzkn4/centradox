@@ -8,7 +8,7 @@ import Link from 'next/link'
 import { Layout } from '@/components/layout/Layout'
 
 export default function DashboardPage() {
-  const { user, isAuthenticated, token } = useAuthStore()
+  const { user, isAuthenticated, token, isHydrated } = useAuthStore()
   const { documents, setDocuments, setLoading, isLoading } = useDocumentStore()
   const [filter, setFilter] = useState('all')
 
@@ -46,16 +46,16 @@ export default function DashboardPage() {
   }, [filter, token, setLoading, setDocuments])
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (isHydrated && !isAuthenticated) {
       window.location.href = '/login'
       return
     }
-    loadDocuments()
-  }, [isAuthenticated, loadDocuments])
+    if (isHydrated && isAuthenticated) {
+      loadDocuments()
+    }
+  }, [isAuthenticated, isHydrated, loadDocuments])
 
-  if (!isAuthenticated) {
-    return null
-  }
+
 
   return (
     <Layout>
