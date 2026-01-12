@@ -27,7 +27,8 @@ export async function GET(
             id: true,
             username: true,
             name: true,
-            role: true
+            role: true,
+            createdAt: true
           }
         },
         workflowSteps: {
