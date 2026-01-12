@@ -1,0 +1,124 @@
+// This is your Prisma schema file
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+enum Role {
+  AUTHOR
+  REVIEWER
+  APPROVER
+  ADMIN
+}
+
+enum DocumentStatus {
+  DRAFT
+  FOR_REVIEW
+  APPROVED
+  CHANGES_REQUESTED
+  FINAL
+}
+
+enum WorkflowStepStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+}
+
+model User {
+  id         String   @id @default(uuid())
+  email      String   @unique
+  name       String
+  password   String
+  department String
+  role       Role     @default(AUTHOR)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  documentsCreated         Document[]         @relation("CreatedDocuments")
+  documentVersionsCreated  DocumentVersion[]  @relation("CreatedVersions")
+  workflowStepsAssigned    WorkflowStep[]     @relation("AssignedSteps")
+  comments                 Comment[]          @relation("UserComments")
+}
+
+model Document {
+  id                String            @id @default(uuid())
+  title             String
+  type              String
+  currentStatus     DocumentStatus    @default(DRAFT)
+  currentVersionId  String?
+  lockedBy          String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  createdBy    User              @relation("CreatedDocuments", fields: [createdById], references: [id])
+  createdById   String
+
+  versions          DocumentVersion[]
+  workflowInstances WorkflowInstance[]
+  comments          Comment[]
+}
+
+model DocumentVersion {
+  id            String   @id @default(uuid())
+  versionNumber Int
+  fileName      String
+  fileSize      Int
+  mimeType      String
+  filePath      String
+  createdAt     DateTime @default(now())
+
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId String
+
+  createdBy User     @relation("CreatedVersions", fields: [createdById], references: [id])
+  createdById String
+
+  @@unique([documentId, versionNumber])
+}
+
+model WorkflowInstance {
+  id              String    @id @default(uuid())
+  currentStep     Int       @default(1)
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  document        Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId      String
+
+  steps           WorkflowStep[]
+}
+
+model WorkflowStep {
+  id            String           @id @default(uuid())
+  stepOrder     Int
+  department    String?
+  role          Role
+  status        WorkflowStepStatus @default(PENDING)
+  completedAt   DateTime?
+  comment       String?
+
+  workflowInstance  WorkflowInstance @relation(fields: [workflowInstanceId], references: [id], onDelete: Cascade)
+  workflowInstanceId String
+
+  assignedTo       User              @relation("AssignedSteps", fields: [assignedToId], references: [id])
+  assignedToId      String
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  text      String
+  createdAt DateTime @default(now())
+
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId String
+
+  author     User     @relation("UserComments", fields: [authorId], references: [id])
+  authorId   String
+}
