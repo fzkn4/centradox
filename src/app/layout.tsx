@@ -7,6 +7,9 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'Centradox - Document Approval System',
   description: 'Document approval workflow management system',
+  icons: {
+    icon: '/favicon.svg',
+  },
 }
 
 export default function RootLayout({
