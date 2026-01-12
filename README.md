@@ -10,13 +10,14 @@ A modern document approval workflow management system built with Next.js, TypeSc
 - **Comments & Collaboration**: Add comments to documents
 - **Status Tracking**: Track document status (Draft, For Review, Approved, Changes Requested, Final)
 - **Workflow Progress**: Visual workflow timeline showing approval stages
+- **Security-First**: No public registration - accounts created by administrators only
 - **Modern UI**: Clean, responsive interface built with Tailwind CSS
 
 ## Tech Stack
 
 - **Frontend**: Next.js 16 (App Router), React 19, TypeScript
 - **Styling**: Tailwind CSS
-- **Database**: PostgreSQL
+- **Database**: SQLite
 - **ORM**: Prisma
 - **Authentication**: JWT tokens with bcrypt password hashing
 - **Rich Text Editor**: TipTap
@@ -69,9 +70,19 @@ Development mode:
 npm run dev
 ```
 
-  The application will be available at `http://localhost:3000`
+   The application will be available at `http://localhost:3000`
 
-Note: A default admin account is automatically created with username 'admin' and password 'password123'. Remember to change the password after first login!
+6. Seed the database with default admin account:
+```bash
+npm run db:seed
+```
+
+**Default Admin Account:**
+- Username: `admin`
+- Password: `password123`
+- **Important**: Change the default password after first login for security!
+
+**Security Note**: This application uses a secure, invite-only registration system. The `/register` endpoint has been removed to prevent unauthorized account creation. All user accounts must be created by administrators.
 
 ## Project Structure
 
@@ -93,7 +104,6 @@ centradox/
 │   │   └── layout/         # Layout components
 │   ├── lib/
 │   │   ├── auth.ts         # Authentication utilities
-│   │   ├── email.ts        # Email notifications
 │   │   ├── permissions.ts  # Permission helpers
 │   │   ├── prisma.ts       # Prisma client
 │   │   └── store.ts        # Zustand state management
@@ -131,7 +141,15 @@ Documents go through the following states:
 - **AUTHOR**: Create and edit documents, submit for review
 - **REVIEWER**: Review documents assigned to them, request changes
 - **APPROVER**: Approve documents assigned to them
-- **ADMIN**: Full access to all documents and administrative functions
+- **ADMIN**: Full access to all documents and administrative functions, create/manage user accounts
+
+## Security Features
+
+- **Username-based Authentication**: No email addresses required for login
+- **JWT Token Authentication**: Secure token-based sessions
+- **Password Hashing**: bcrypt with salt rounds for secure password storage
+- **No Public Registration**: Invite-only system prevents unauthorized account creation
+- **Admin-Only Account Management**: Only administrators can create new user accounts
 
 ## License
 
