@@ -8,6 +8,42 @@ async function main() {
 
   const hashedPassword = await bcrypt.hash('password123', 10)
 
+  // Create departments
+  const departments = await Promise.all([
+    prisma.department.upsert({
+      where: { name: 'Management' },
+      update: {},
+      create: {
+        name: 'Management',
+        description: 'Executive and administrative management'
+      }
+    }),
+    prisma.department.upsert({
+      where: { name: 'Marketing' },
+      update: {},
+      create: {
+        name: 'Marketing',
+        description: 'Marketing and communications'
+      }
+    }),
+    prisma.department.upsert({
+      where: { name: 'Finance' },
+      update: {},
+      create: {
+        name: 'Finance',
+        description: 'Financial operations and accounting'
+      }
+    }),
+    prisma.department.upsert({
+      where: { name: 'Legal' },
+      update: {},
+      create: {
+        name: 'Legal',
+        description: 'Legal affairs and compliance'
+      }
+    })
+  ])
+
   const users = await Promise.all([
     prisma.user.upsert({
       where: { username: 'admin' },
@@ -17,7 +53,9 @@ async function main() {
         name: 'Admin User',
         password: hashedPassword,
         role: 'ADMIN',
-        department: 'Management'
+        departments: {
+          connect: [{ name: 'Management' }]
+        }
       }
     }),
     prisma.user.upsert({
@@ -28,7 +66,9 @@ async function main() {
         name: 'Jane Author',
         password: hashedPassword,
         role: 'AUTHOR',
-        department: 'Marketing'
+        departments: {
+          connect: [{ name: 'Marketing' }]
+        }
       }
     }),
     prisma.user.upsert({
@@ -39,7 +79,9 @@ async function main() {
         name: 'Bob Reviewer',
         password: hashedPassword,
         role: 'REVIEWER',
-        department: 'Finance'
+        departments: {
+          connect: [{ name: 'Finance' }]
+        }
       }
     }),
     prisma.user.upsert({
@@ -50,7 +92,9 @@ async function main() {
         name: 'Carol Approver',
         password: hashedPassword,
         role: 'APPROVER',
-        department: 'Legal'
+        departments: {
+          connect: [{ name: 'Legal' }]
+        }
       }
     })
   ])

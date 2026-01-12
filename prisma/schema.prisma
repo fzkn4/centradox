@@ -31,15 +31,27 @@ enum WorkflowStepStatus {
   SKIPPED
 }
 
+model Department {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users         User[]         @relation("UserDepartments")
+  workflowSteps WorkflowStep[] @relation("DepartmentWorkflowSteps")
+}
+
 model User {
   id         String   @id @default(uuid())
   username   String   @unique
   name       String
   password   String
-  department String
   role       Role     @default(AUTHOR)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  departments             Department[]     @relation("UserDepartments")
 
   documentsCreated         Document[]         @relation("CreatedDocuments")
   documentVersionsCreated  DocumentVersion[]  @relation("CreatedVersions")
@@ -98,7 +110,7 @@ model WorkflowInstance {
 model WorkflowStep {
   id            String           @id @default(uuid())
   stepOrder     Int
-  department    String?
+  departmentId  String?
   role          Role
   status        WorkflowStepStatus @default(PENDING)
   completedAt   DateTime?
@@ -109,6 +121,8 @@ model WorkflowStep {
 
   assignedTo       User              @relation("AssignedSteps", fields: [assignedToId], references: [id])
   assignedToId      String
+
+  department        Department?       @relation("DepartmentWorkflowSteps", fields: [departmentId], references: [id])
 }
 
 model Comment {

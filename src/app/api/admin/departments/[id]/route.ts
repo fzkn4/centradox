@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken, getTokenFromRequest } from '@/lib/auth'
-import bcrypt from 'bcryptjs'
 
-// GET /api/admin/users/[id] - Get user details (admin only)
+// GET /api/admin/departments/[id] - Get department details (admin only)
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -20,36 +19,45 @@ export async function GET(
     }
 
     const { id } = await params
-    const user = await prisma.user.findUnique({
+    const department = await prisma.department.findUnique({
       where: { id },
-      select: {
-        id: true,
-        username: true,
-        name: true,
-        role: true,
-        departments: {
+      include: {
+        users: {
           select: {
             id: true,
-            name: true
+            username: true,
+            name: true,
+            role: true
           }
         },
-        createdAt: true,
-        updatedAt: true
+        workflowSteps: {
+          select: {
+            id: true,
+            stepOrder: true,
+            status: true
+          }
+        },
+        _count: {
+          select: {
+            users: true,
+            workflowSteps: true
+          }
+        }
       }
     })
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    if (!department) {
+      return NextResponse.json({ error: 'Department not found' }, { status: 404 })
     }
 
-    return NextResponse.json({ user })
+    return NextResponse.json({ department })
   } catch (error) {
-    console.error('Error fetching user:', error)
+    console.error('Error fetching department:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
-// PUT /api/admin/users/[id] - Update user (admin only)
+// PUT /api/admin/departments/[id] - Update department (admin only)
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -66,69 +74,48 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const { username, password, name, role, departmentIds } = body
+    const { name, description } = body
 
-    if (!username || !name) {
+    if (!name) {
       return NextResponse.json(
-        { error: 'Username and name are required' },
+        { error: 'Department name is required' },
         { status: 400 }
       )
     }
 
     const { id } = await params
 
-    // Check if username is taken by another user
-    const existingUser = await prisma.user.findFirst({
+    // Check if name is taken by another department
+    const existingDepartment = await prisma.department.findFirst({
       where: {
-        username,
+        name,
         id: { not: id }
       }
     })
 
-    const updateData: any = {
-      username,
-      name,
-      role
+    if (existingDepartment) {
+      return NextResponse.json(
+        { error: 'Department with this name already exists' },
+        { status: 409 }
+      )
     }
 
-    // Handle department assignments
-    if (departmentIds !== undefined) {
-      updateData.departments = {
-        set: departmentIds.map((deptId: string) => ({ id: deptId }))
-      }
-    }
-
-    // Only update password if provided
-    if (password) {
-      updateData.password = await bcrypt.hash(password, 10)
-    }
-
-    const user = await prisma.user.update({
+    const department = await prisma.department.update({
       where: { id },
-      data: updateData,
-      select: {
-        id: true,
-        username: true,
-        name: true,
-        role: true,
-        departments: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        updatedAt: true
+      data: {
+        name,
+        description
       }
     })
 
-    return NextResponse.json({ user })
+    return NextResponse.json({ department })
   } catch (error) {
-    console.error('Error updating user:', error)
+    console.error('Error updating department:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
-// DELETE /api/admin/users/[id] - Delete user (admin only)
+// DELETE /api/admin/departments/[id] - Delete department (admin only)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -144,43 +131,46 @@ export async function DELETE(
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
-    // Prevent deleting the last admin
-    const adminCount = await prisma.user.count({
-      where: { role: 'ADMIN' }
-    })
-
     const { id } = await params
 
-    const userToDelete = await prisma.user.findUnique({
-      where: { id }
+    const department = await prisma.department.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            users: true,
+            workflowSteps: true
+          }
+        }
+      }
     })
 
-    if (!userToDelete) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    if (!department) {
+      return NextResponse.json({ error: 'Department not found' }, { status: 404 })
     }
 
-    if (userToDelete.role === 'ADMIN' && adminCount <= 1) {
+    // Check if department has users or workflow steps
+    if (department._count.users > 0) {
       return NextResponse.json(
-        { error: 'Cannot delete the last admin user' },
+        { error: 'Cannot delete department that has assigned users' },
         { status: 400 }
       )
     }
 
-    // Prevent self-deletion
-    if (id === payload.userId) {
+    if (department._count.workflowSteps > 0) {
       return NextResponse.json(
-        { error: 'Cannot delete your own account' },
+        { error: 'Cannot delete department that is used in workflow steps' },
         { status: 400 }
       )
     }
 
-    await prisma.user.delete({
+    await prisma.department.delete({
       where: { id }
     })
 
-    return NextResponse.json({ message: 'User deleted successfully' })
+    return NextResponse.json({ message: 'Department deleted successfully' })
   } catch (error) {
-    console.error('Error deleting user:', error)
+    console.error('Error deleting department:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

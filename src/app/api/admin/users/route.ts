@@ -22,7 +22,12 @@ export async function GET(request: NextRequest) {
         username: true,
         name: true,
         role: true,
-        department: true,
+        departments: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
         createdAt: true,
         updatedAt: true
       },
@@ -50,7 +55,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { username, password, name, role, department } = body
+    const { username, password, name, role, departmentIds } = body
 
     if (!username || !password || !name) {
       return NextResponse.json(
@@ -78,15 +83,22 @@ export async function POST(request: NextRequest) {
         username,
         password: hashedPassword,
         name,
-        department: department || 'General',
-        role: role || 'AUTHOR'
+        role: role || 'AUTHOR',
+        departments: departmentIds && departmentIds.length > 0 ? {
+          connect: departmentIds.map((id: string) => ({ id }))
+        } : undefined
       },
       select: {
         id: true,
         username: true,
         name: true,
         role: true,
-        department: true,
+        departments: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
         createdAt: true
       }
     })
