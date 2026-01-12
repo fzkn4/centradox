@@ -59,26 +59,26 @@ async function main() {
       }
     }),
     prisma.user.upsert({
-      where: { username: 'author' },
+      where: { username: 'editor' },
       update: {},
       create: {
-        username: 'author',
-        name: 'Jane Author',
+        username: 'editor',
+        name: 'Jane Editor',
         password: hashedPassword,
-        role: 'AUTHOR',
+        role: 'EDITOR',
         departments: {
           connect: [{ name: 'Marketing' }]
         }
       }
     }),
     prisma.user.upsert({
-      where: { username: 'reviewer' },
+      where: { username: 'approver' },
       update: {},
       create: {
-        username: 'reviewer',
-        name: 'Bob Reviewer',
+        username: 'approver',
+        name: 'Bob Approver',
         password: hashedPassword,
-        role: 'REVIEWER',
+        role: 'APPROVER',
         departments: {
           connect: [{ name: 'Finance' }]
         }

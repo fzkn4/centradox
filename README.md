@@ -188,9 +188,8 @@ Documents go through the following states:
 
 ## Roles and Permissions
 
-- **AUTHOR**: Create and edit documents, submit for review
-- **REVIEWER**: Review documents assigned to them, request changes
-- **APPROVER**: Approve documents assigned to them
+- **EDITOR**: Create and edit documents, submit for review
+- **APPROVER**: Review and approve documents assigned to them
 - **ADMIN**:
   - Full access to all documents and administrative functions
   - Create/manage user accounts and department assignments

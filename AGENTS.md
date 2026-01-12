@@ -96,10 +96,10 @@ import { useAuthStore } from '@/lib/store'
 ### Authentication & Authorization
 - JWT tokens in `Authorization: Bearer <token>` header
 - Permission helpers in `/src/lib/permissions.ts`:
-  - `canUserEditDocument()`
-  - `canUserApproveDocument()`
-  - `canUserSubmitDocument()`
-- Roles: AUTHOR, REVIEWER, APPROVER, ADMIN
+  - `canUserEditDocument()` - EDITOR and ADMIN can edit documents
+  - `canUserApproveDocument()` - APPROVER and ADMIN can approve documents
+  - `canUserSubmitDocument()` - Document authors can submit for review
+- Roles: ADMIN, EDITOR, APPROVER
 
 ### Styling
 - Tailwind CSS utility-first approach

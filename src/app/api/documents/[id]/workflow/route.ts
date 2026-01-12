@@ -58,7 +58,7 @@ export async function POST(
             create: [
               {
                 stepOrder: 1,
-                role: 'REVIEWER',
+                role: 'APPROVER',
                 assignedToId: user.userId
               }
             ]

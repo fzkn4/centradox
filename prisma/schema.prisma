@@ -7,14 +7,12 @@ generator client {
 datasource db {
   provider = "sqlite"
   url      = "file:./dev.db"
-  foreignKeys = true
 }
 
 enum Role {
-  AUTHOR
-  REVIEWER
-  APPROVER
   ADMIN
+  EDITOR
+  APPROVER
 }
 
 enum DocumentStatus {
@@ -48,7 +46,7 @@ model User {
   username   String   @unique
   name       String
   password   String
-  role       Role     @default(AUTHOR)
+  role       Role     @default(EDITOR)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

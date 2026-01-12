@@ -508,7 +508,6 @@ export default function DepartmentManagementPage() {
                                 <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                                   user.role === 'ADMIN' ? 'bg-red-100 text-red-800' :
                                   user.role === 'APPROVER' ? 'bg-green-100 text-green-800' :
-                                  user.role === 'REVIEWER' ? 'bg-yellow-100 text-yellow-800' :
                                   'bg-blue-100 text-blue-800'
                                 }`}>
                                   {user.role}

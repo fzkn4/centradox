@@ -7,7 +7,7 @@ export function canUserEditDocument(userRole: string, documentStatus: string, au
 }
 
 export function canUserApproveDocument(userRole: string, userId: string, assignedToId: string): boolean {
-  return userRole === 'REVIEWER' || userRole === 'APPROVER' || userRole === 'ADMIN'
+  return userRole === 'APPROVER' || userRole === 'ADMIN'
 }
 
 export function canUserSubmitDocument(documentStatus: string, authorId: string, userId: string): boolean {

@@ -20,7 +20,7 @@ interface User {
   updatedAt: string
 }
 
-const roles = ['AUTHOR', 'REVIEWER', 'APPROVER', 'ADMIN'] as const
+const roles = ['ADMIN', 'EDITOR', 'APPROVER'] as const
 type Role = typeof roles[number]
 
 export default function UserManagementPage() {
@@ -40,7 +40,7 @@ export default function UserManagementPage() {
     username: '',
     password: '',
     name: '',
-    role: 'AUTHOR' as Role,
+    role: 'EDITOR' as Role,
     departmentIds: [] as string[]
   })
 
@@ -109,7 +109,7 @@ export default function UserManagementPage() {
 
       if (response.ok) {
         setShowCreateModal(false)
-        setFormData({ username: '', password: '', name: '', role: 'AUTHOR', departmentIds: [] })
+        setFormData({ username: '', password: '', name: '', role: 'EDITOR', departmentIds: [] })
         fetchUsers()
       } else {
         const data = await response.json()
@@ -162,7 +162,7 @@ export default function UserManagementPage() {
         setTimeout(() => {
           setShowEditModal(false)
           setEditingUser(null)
-          setFormData({ username: '', password: '', name: '', role: 'AUTHOR', departmentIds: [] })
+          setFormData({ username: '', password: '', name: '', role: 'EDITOR', departmentIds: [] })
           setEditModalSuccess('')
           setOriginalFormData(null)
         }, 1500)
@@ -306,12 +306,11 @@ export default function UserManagementPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          user.role === 'ADMIN' ? 'bg-red-100 text-red-800' :
-                          user.role === 'APPROVER' ? 'bg-green-100 text-green-800' :
-                          user.role === 'REVIEWER' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-blue-100 text-blue-800'
-                        }`}>
+                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                           user.role === 'ADMIN' ? 'bg-red-100 text-red-800' :
+                           user.role === 'APPROVER' ? 'bg-green-100 text-green-800' :
+                           'bg-blue-100 text-blue-800'
+                         }`}>
                           {user.role}
                         </span>
                       </td>
@@ -510,7 +509,7 @@ export default function UserManagementPage() {
                     onClick={() => {
                       setShowEditModal(false)
                       setEditingUser(null)
-                      setFormData({ username: '', password: '', name: '', role: 'AUTHOR', departmentIds: [] })
+                      setFormData({ username: '', password: '', name: '', role: 'EDITOR', departmentIds: [] })
                       setEditModalError('')
                       setEditModalSuccess('')
                       setOriginalFormData(null)
@@ -684,7 +683,7 @@ export default function UserManagementPage() {
                       onClick={() => {
                         setShowEditModal(false)
                         setEditingUser(null)
-                        setFormData({ username: '', password: '', name: '', role: 'AUTHOR', departmentIds: [] })
+                        setFormData({ username: '', password: '', name: '', role: 'EDITOR', departmentIds: [] })
                         setEditModalError('')
                         setEditModalSuccess('')
                         setOriginalFormData(null)

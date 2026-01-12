@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
         username,
         password: hashedPassword,
         name,
-        role: role || 'AUTHOR',
+        role: role || 'EDITOR',
         departments: departmentIds && departmentIds.length > 0 ? {
           connect: departmentIds.map((id: string) => ({ id }))
         } : undefined
