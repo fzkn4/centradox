@@ -10,10 +10,10 @@ async function main() {
 
   const users = await Promise.all([
     prisma.user.upsert({
-      where: { email: 'admin@example.com' },
+      where: { username: 'admin' },
       update: {},
       create: {
-        email: 'admin@example.com',
+        username: 'admin',
         name: 'Admin User',
         password: hashedPassword,
         role: 'ADMIN',
@@ -21,10 +21,10 @@ async function main() {
       }
     }),
     prisma.user.upsert({
-      where: { email: 'author@example.com' },
+      where: { username: 'author' },
       update: {},
       create: {
-        email: 'author@example.com',
+        username: 'author',
         name: 'Jane Author',
         password: hashedPassword,
         role: 'AUTHOR',
@@ -32,10 +32,10 @@ async function main() {
       }
     }),
     prisma.user.upsert({
-      where: { email: 'reviewer@example.com' },
+      where: { username: 'reviewer' },
       update: {},
       create: {
-        email: 'reviewer@example.com',
+        username: 'reviewer',
         name: 'Bob Reviewer',
         password: hashedPassword,
         role: 'REVIEWER',
@@ -43,10 +43,10 @@ async function main() {
       }
     }),
     prisma.user.upsert({
-      where: { email: 'approver@example.com' },
+      where: { username: 'approver' },
       update: {},
       create: {
-        email: 'approver@example.com',
+        username: 'approver',
         name: 'Carol Approver',
         password: hashedPassword,
         role: 'APPROVER',
@@ -55,13 +55,12 @@ async function main() {
     })
   ])
 
-  console.log('✅ Database seeded successfully!')
-  console.log('\n📧 Test Accounts:')
-  console.log('Admin: admin@example.com / password123')
-  console.log('Author: author@example.com / password123')
-  console.log('Reviewer: reviewer@example.com / password123')
-  console.log('Approver: approver@example.com / password123')
-  console.log('\n📝 No documents seeded - create documents by uploading files from the UI')
+   console.log('✅ Database seeded successfully!')
+   console.log('\n👤 Default Admin Account:')
+   console.log('Username: admin')
+   console.log('Password: password123')
+   console.log('\n📝 No documents seeded - create documents by uploading files from the UI')
+   console.log('\n⚠️  Remember to change the default admin password after first login!')
 }
 
 main()

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken, getTokenFromRequest } from '@/lib/auth'
-import { sendDocumentNotification } from '@/lib/email'
+
 
 async function getUserFromRequest(request: NextRequest) {
   const token = getTokenFromRequest(request)
@@ -131,13 +131,6 @@ export async function POST(
           where: { id: workflowInstance.id },
           data: { currentStep: nextStep.stepOrder }
         })
-
-        await sendDocumentNotification({
-          to: nextStep.assignedTo.email,
-          documentTitle: document.title,
-          action: 'requires your review',
-          documentUrl: `${process.env.APP_URL}/documents/${id}`
-        })
       } else {
         await prisma.workflowInstance.update({
           where: { id: workflowInstance.id },
@@ -147,13 +140,6 @@ export async function POST(
         await prisma.document.update({
           where: { id },
           data: { currentStatus: 'APPROVED' }
-        })
-
-        await sendDocumentNotification({
-          to: document.createdBy.email,
-          documentTitle: document.title,
-          action: 'has been approved',
-          documentUrl: `${process.env.APP_URL}/documents/${id}`
         })
       }
     } else if (action === 'request-changes') {
@@ -172,17 +158,10 @@ export async function POST(
         }
       })
 
-      await prisma.document.update({
-        where: { id },
-        data: { currentStatus: 'CHANGES_REQUESTED' }
-      })
-
-      await sendDocumentNotification({
-        to: document.createdBy.email,
-        documentTitle: document.title,
-        action: 'has changes requested',
-        documentUrl: `${process.env.APP_URL}/documents/${id}`
-      })
+        await prisma.document.update({
+          where: { id },
+          data: { currentStatus: 'CHANGES_REQUESTED' }
+        })
     }
 
     const updatedDocument = await prisma.document.findUnique({
@@ -191,7 +170,7 @@ export async function POST(
         createdBy: {
           select: {
             id: true,
-            email: true,
+            username: true,
             name: true,
             role: true,
             department: true
@@ -202,7 +181,7 @@ export async function POST(
             createdBy: {
               select: {
                 id: true,
-                email: true,
+                username: true,
                 name: true
               }
             }
@@ -218,7 +197,7 @@ export async function POST(
                 assignedTo: {
                   select: {
                     id: true,
-                    email: true,
+                    username: true,
                     name: true
                   }
                 }

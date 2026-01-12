@@ -45,22 +45,14 @@ export function Navbar() {
                   Logout
                 </button>
               </>
-            ) : (
-              <>
-                <Link
-                  href="/login"
-                  className="text-sm text-gray-700 hover:text-gray-900"
-                >
-                  Login
-                </Link>
-                <Link
-                  href="/register"
-                  className="text-sm bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700"
-                >
-                  Register
-                </Link>
-              </>
-            )}
+             ) : (
+               <Link
+                 href="/login"
+                 className="text-sm bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700"
+               >
+                 Login
+               </Link>
+             )}
           </div>
         </div>
       </div>

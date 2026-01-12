@@ -6,17 +6,17 @@ import { generateToken } from '@/lib/auth'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { email, password } = body
+    const { username, password } = body
 
-    if (!email || !password) {
+    if (!username || !password) {
       return NextResponse.json(
-        { error: 'Email and password are required' },
+        { error: 'Username and password are required' },
         { status: 400 }
       )
     }
 
     const user = await prisma.user.findUnique({
-      where: { email }
+      where: { username }
     })
 
     if (!user) {
@@ -37,14 +37,14 @@ export async function POST(request: NextRequest) {
 
     const token = generateToken({
       userId: user.id,
-      email: user.email,
+      username: user.username,
       role: user.role
     })
 
     const response = NextResponse.json({
       user: {
         id: user.id,
-        email: user.email,
+        username: user.username,
         name: user.name,
         role: user.role,
         department: user.department

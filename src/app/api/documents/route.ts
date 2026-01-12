@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
         createdBy: {
           select: {
             id: true,
-            email: true,
+            username: true,
             name: true,
             role: true,
             department: true
@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
         createdBy: {
           select: {
             id: true,
-            email: true,
+            username: true,
             name: true,
             role: true,
             department: true
@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
             createdBy: {
               select: {
                 id: true,
-                email: true,
+                username: true,
                 name: true
               }
             }

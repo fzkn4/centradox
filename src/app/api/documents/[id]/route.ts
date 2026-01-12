@@ -68,7 +68,7 @@ export async function GET(
         createdBy: {
           select: {
             id: true,
-            email: true,
+            username: true,
             name: true,
             role: true,
             department: true
@@ -79,7 +79,7 @@ export async function GET(
             createdBy: {
               select: {
                 id: true,
-                email: true,
+                username: true,
                 name: true
               }
             }
@@ -93,7 +93,7 @@ export async function GET(
             author: {
               select: {
                 id: true,
-                email: true,
+                username: true,
                 name: true
               }
             }
@@ -109,7 +109,7 @@ export async function GET(
                 assignedTo: {
                   select: {
                     id: true,
-                    email: true,
+                    username: true,
                     name: true
                   }
                 }
@@ -214,7 +214,7 @@ export async function PUT(
         createdBy: {
           select: {
             id: true,
-            email: true,
+            username: true,
             name: true,
             role: true,
             department: true
@@ -225,7 +225,7 @@ export async function PUT(
             createdBy: {
               select: {
                 id: true,
-                email: true,
+                username: true,
                 name: true
               }
             }

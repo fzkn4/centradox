@@ -14,76 +14,53 @@ This file provides guidelines and instructions for agentic coding agents working
 - `npm run db:generate` - Generate Prisma client after schema changes
 - `npm run db:push` - Push schema changes to database (destructive, dev only)
 - `npm run db:migrate` - Create and run migrations
-- `npm run db:seed` - Seed database with test data
+- `npm run db:seed` - Seed database with test data (manual registration required)
 
 ## Code Style Guidelines
 
-### Imports and Exports
-- Use ES6 import/export syntax
-- Group imports: external libraries first, internal modules second
-- Absolute imports use `@/` alias for src directory
-```typescript
-import { useState, useEffect } from 'react'
-import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { useAuthStore } from '@/lib/store'
-```
+### Tech Stack
+- **Frontend**: Next.js 16 (App Router), React 19, TypeScript 5.9
+- **Database**: SQLite with Prisma ORM
+- **Styling**: Tailwind CSS 4.1
+- **Auth**: JWT tokens with bcryptjs
+- **State**: Zustand
+- **Editor**: TipTap
+- **Email**: Nodemailer
 
 ### TypeScript
-- All files must be `.ts` or `.tsx` extensions
-- Use strict mode (enabled in tsconfig.json)
+- Strict mode enabled in tsconfig.json
+- All files use `.ts` or `.tsx` extensions
 - Type all function parameters and return values explicitly
-- Use interfaces for object shapes, types for unions/primitives
-- Avoid `any` type - use `unknown` or proper types instead
-- Use Prisma-generated types when working with database models
+- Use interfaces for objects, types for unions/primitives
+- Avoid `any` type - use `unknown` or proper types
+- Use Prisma-generated types for database models
 
 ### React/Next.js Components
-- Use functional components with hooks
-- Use `'use client'` directive for client components that use hooks
-- Use async server components for data fetching when possible
-- Client-side data fetching should use `useEffect` or SWR patterns
-- State management uses Zustand (see `/src/lib/store.ts`)
+- Functional components with hooks
+- `'use client'` directive for client components
+- Async server components for data fetching
+- State management: Zustand for global, React hooks for local
 ```typescript
 'use client'
-
 import { useState } from 'react'
 
 export default function Component() {
   const [count, setCount] = useState(0)
-  
   return <div>{count}</div>
 }
 ```
 
 ### API Routes
-- Place API routes in `/src/app/api/[resource]/route.ts`
-- Use Next.js App Router conventions (GET, POST, PUT, DELETE named exports)
-- Always include error handling with try-catch blocks
-- Return proper HTTP status codes: 200 (OK), 201 (Created), 400 (Bad Request), 401 (Unauthorized), 403 (Forbidden), 404 (Not Found), 500 (Internal Server Error)
-- Authenticate users using `getTokenFromRequest()` and `verifyToken()` from `/src/lib/auth.ts`
-- Example structure:
-```typescript
-export async function GET(request: NextRequest) {
-  try {
-    const user = await getUserFromRequest(request)
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    // ... logic
-    return NextResponse.json({ data })
-  } catch (error) {
-    console.error('Error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-  }
-}
-```
+- Place in `/src/app/api/[resource]/route.ts`
+- Use GET, POST, PUT, DELETE named exports
+- Always include try-catch blocks
+- Return proper HTTP status codes (200, 201, 400, 401, 403, 404, 500)
+- Authenticate with `getTokenFromRequest()` from `/src/lib/auth.ts`
 
 ### Database (Prisma)
-- Import Prisma client from `/src/lib/prisma.ts`
-- Use Prisma-generated types for type safety
-- Always use transactions for multi-step operations
-- Handle database errors gracefully
-- Example queries:
+- Import client from `/src/lib/prisma.ts`
+- Use transactions for multi-step operations
+- Handle errors gracefully
 ```typescript
 import { prisma } from '@/lib/prisma'
 
@@ -92,57 +69,43 @@ const documents = await prisma.document.findMany({
   include: { createdBy: true },
   orderBy: { createdAt: 'desc' }
 })
-
-await prisma.document.create({
-  data: {
-    title: 'New Doc',
-    createdById: userId,
-    versions: { create: { ... } }
-  }
-})
 ```
 
 ### Naming Conventions
-- **Files**: kebab-case for non-component files (e.g., `auth.ts`, `document-service.ts`), PascalCase for components
-- **Variables**: camelCase (e.g., `documentId`, `currentStatus`)
-- **Constants**: UPPER_SNAKE_CASE (e.g., `DATABASE_URL`, `JWT_SECRET`)
-- **Functions**: camelCase with verb-first naming (e.g., `getUserById`, `createDocument`, `submitForReview`)
-- **Types/Interfaces**: PascalCase (e.g., `Document`, `User`, `WorkflowAction`)
+- **Files**: kebab-case for utilities (e.g., `auth.ts`), PascalCase for components
+- **Variables/Functions**: camelCase (e.g., `getUserById`, `documentId`)
+- **Constants**: UPPER_SNAKE_CASE (e.g., `DATABASE_URL`)
+- **Types/Interfaces**: PascalCase (e.g., `Document`, `User`)
+
+### Imports and Exports
+- ES6 import/export syntax
+- Group: external libraries first, then internal modules
+- Absolute imports with `@/` alias for src directory
+```typescript
+import { useState } from 'react'
+import { prisma } from '@/lib/prisma'
+import { useAuthStore } from '@/lib/store'
+```
 
 ### Error Handling
-- Always include try-catch blocks for async operations
+- Try-catch blocks for async operations
 - Log errors with context: `console.error('Operation failed:', error)`
-- Return user-friendly error messages via API responses
-- Use proper HTTP status codes in API responses
-- Client-side errors should be displayed to users via state
-
-### State Management
-- Use Zustand for global state (`/src/lib/store.ts`)
-- Local state: React hooks (`useState`, `useReducer`)
-- Server state: Next.js server components and API routes
-- Avoid prop drilling - use Zustand or context for shared state
-
-### Styling
-- Use Tailwind CSS for all styling
-- Utility-first approach with standard Tailwind classes
-- Responsive design: mobile-first with `md:`, `lg:` breakpoints
-- Colors: use gray scale for neutrals, indigo-600 for primary actions
-- Spacing: Tailwind spacing scale (2, 4, 8, etc.)
-- Components should be self-contained with their styles
+- Return user-friendly error messages
+- Proper HTTP status codes in API responses
 
 ### Authentication & Authorization
-- All API routes must authenticate using JWT tokens from `Authorization: Bearer <token>` header
-- Use `getTokenFromRequest()` and `verifyToken()` utilities
-- Check permissions using `/src/lib/permissions.ts` helpers:
+- JWT tokens in `Authorization: Bearer <token>` header
+- Permission helpers in `/src/lib/permissions.ts`:
   - `canUserEditDocument()`
   - `canUserApproveDocument()`
   - `canUserSubmitDocument()`
-- Role-based access: check user.role against 'AUTHOR', 'REVIEWER', 'APPROVER', 'ADMIN'
+- Roles: AUTHOR, REVIEWER, APPROVER, ADMIN
 
-### Testing
-- Run `npm run lint` before committing
-- Test API endpoints with curl or Postman
-- Use seeded test accounts (from `npm run db:seed`)
+### Styling
+- Tailwind CSS utility-first approach
+- Mobile-first responsive design (`md:`, `lg:` breakpoints)
+- Gray scale for neutrals, indigo-600 for primary actions
+- Self-contained component styles
 
 ### File Organization
 - API routes: `/src/app/api/[resource]/[action]/route.ts`
@@ -152,52 +115,31 @@ await prisma.document.create({
 - Types: `/src/types/index.ts`
 - Database: `/prisma/schema.prisma`
 
-### Comments
-- Add comments only when logic is complex or non-obvious
-- Use `//` for single-line, `/* */` for multi-line
-- Document API routes with endpoint purpose, parameters, and responses
+## Workflow Implementation
 
-### Environment Variables
-- Never commit `.env` or `.env.local`
-- Use `.env.example` as template
-- Access via `process.env.VARIABLE_NAME`
-- Required: DATABASE_URL, JWT_SECRET
-- Optional: SMTP_* for email, APP_URL
-
-### Workflow Implementation Notes
-- Documents flow: DRAFT → FOR_REVIEW → APPROVED → FINAL
-- Or with changes: DRAFT → FOR_REVIEW → CHANGES_REQUESTED → (back to DRAFT)
-- Workflow steps are created when document is submitted
-- Each step has assigned user, status (PENDING/IN_PROGRESS/COMPLETED), and optional comment
+- **Document Flow**: DRAFT → FOR_REVIEW → APPROVED → FINAL
+- **With Changes**: DRAFT → FOR_REVIEW → CHANGES_REQUESTED → DRAFT
+- Workflow steps created on document submission
+- Each step: assigned user, status (PENDING/IN_PROGRESS/COMPLETED), optional comment
 - Current step tracked in WorkflowInstance.currentStep
-- Notifications sent on status changes via `/src/lib/email.ts`
+- Email notifications via `/src/lib/email.ts`
 
 ## Common Patterns
 
-### Fetching with Authentication
+### Authenticated Fetch
 ```typescript
 const response = await fetch('/api/documents', {
-  headers: {
-    Authorization: `Bearer ${localStorage.getItem('token')}`
-  }
+  headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
 })
 ```
 
-### Protected Client Component
+### Protected Component
 ```typescript
 'use client'
-import { useEffect } from 'react'
 import { useAuthStore } from '@/lib/store'
 
 export default function ProtectedPage() {
   const { isAuthenticated } = useAuthStore()
-  
-  useEffect(() => {
-    if (!isAuthenticated) {
-      window.location.href = '/login'
-    }
-  }, [isAuthenticated])
-  
   if (!isAuthenticated) return null
   return <div>Protected content</div>
 }
@@ -212,18 +154,25 @@ await prisma.$transaction(async (tx) => {
 })
 ```
 
-## Specific Technology Notes
+## Technology Notes
 
-- **TipTap Editor**: Initialize with extensions, content, and editable state. Use EditorContent component for rendering.
-- **bcryptjs**: Use for password hashing (10 rounds salt). Never store plain text passwords.
-- **jsonwebtoken**: Use for JWT tokens. Generate with sign(), verify with verify().
-- **date-fns**: Use for date formatting (format(date, 'MMM dd, yyyy')).
+- **TipTap Editor**: Initialize with extensions, content, editable state
+- **bcryptjs**: Password hashing with 10 salt rounds
+- **jsonwebtoken**: JWT generation/verification
+- **date-fns**: Date formatting (format(date, 'MMM dd, yyyy'))
 
-## Running a Single Test
+## Testing
 
-Currently, no automated test suite is set up. Manual testing:
-1. Seed database: `npm run db:seed`
+Currently no automated test suite. Manual testing:
+1. Run `npm run db:seed` to create default admin account (admin/password123)
 2. Start dev server: `npm run dev`
-3. Use test accounts from README to test flows
-4. Check browser console for errors
+3. Visit http://localhost:3000 and login with admin/password123
+4. Test with seeded accounts, check browser console
 5. Verify API responses in Network tab
+
+## Environment Variables
+
+- Never commit `.env` files
+- Required: DATABASE_URL, JWT_SECRET
+- Optional: SMTP_* for email, APP_URL
+- Access via `process.env.VARIABLE_NAME`

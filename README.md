@@ -10,7 +10,6 @@ A modern document approval workflow management system built with Next.js, TypeSc
 - **Comments & Collaboration**: Add comments to documents
 - **Status Tracking**: Track document status (Draft, For Review, Approved, Changes Requested, Final)
 - **Workflow Progress**: Visual workflow timeline showing approval stages
-- **Email Notifications**: Automatic email notifications on workflow events
 - **Modern UI**: Clean, responsive interface built with Tailwind CSS
 
 ## Tech Stack
@@ -22,7 +21,6 @@ A modern document approval workflow management system built with Next.js, TypeSc
 - **Authentication**: JWT tokens with bcrypt password hashing
 - **Rich Text Editor**: TipTap
 - **State Management**: Zustand
-- **Email**: Nodemailer
 - **Date Handling**: date-fns
 
 ## Getting Started
@@ -51,11 +49,6 @@ Edit `.env` and update the following variables:
  DATABASE_URL="file:./prisma/dev.db"
 JWT_SECRET="your-secret-key-change-in-production"
 JWT_EXPIRES_IN="7d"
-SMTP_HOST="smtp.gmail.com"
-SMTP_PORT="587"
-SMTP_USER="your-email@gmail.com"
-SMTP_PASSWORD="your-app-password"
-EMAIL_FROM="noreply@centradox.com"
 APP_URL="http://localhost:3000"
 ```
 
@@ -76,9 +69,9 @@ Development mode:
 npm run dev
 ```
 
- The application will be available at `http://localhost:3000`
+  The application will be available at `http://localhost:3000`
 
-Note: You need to register your first user through the UI at http://localhost:3000/register
+Note: A default admin account is automatically created with username 'admin' and password 'password123'. Remember to change the password after first login!
 
 ## Project Structure
 
@@ -94,8 +87,7 @@ centradox/
 │   │   │   └── documents/   # Document CRUD & workflow
 │   │   ├── dashboard/        # Dashboard page
 │   │   ├── documents/       # Document pages
-│   │   ├── login/           # Login page
-│   │   └── register/        # Registration page
+│   │   └── login/           # Login page
 │   ├── components/
 │   │   ├── documents/       # Document-related components
 │   │   └── layout/         # Layout components
@@ -114,7 +106,6 @@ centradox/
 
 ### Authentication
 - `POST /api/auth/login` - User login
-- `POST /api/auth/register` - User registration
 
 ### Documents
 - `GET /api/documents` - List documents (supports filters)
