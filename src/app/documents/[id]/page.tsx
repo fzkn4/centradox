@@ -4,7 +4,6 @@ import { useEffect, useState, use, useCallback } from 'react'
 import { useAuthStore, useDocumentStore } from '@/lib/store'
 import { getStatusColor, getStatusLabel } from '@/lib/permissions'
 import { format } from 'date-fns'
-import { Layout } from '@/components/layout/Layout'
 import { AdminLayout } from '@/components/layout/AdminLayout'
 import Link from 'next/link'
 
@@ -80,181 +79,10 @@ export default function DocumentViewPage({ params }: { params: Promise<{ id: str
       loadDocument()
       loadComments()
     }
-  }, [isAuthenticated, isHydrated, loadDocument, loadComments])
-
-  const LayoutComponent = user?.role === 'ADMIN' ? AdminLayout : Layout
-
-  const handleDownload = async (version: DocumentVersion) => {
-    try {
-      const response = await fetch(`/api/documents/${version.id}/download`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      })
-
-      if (response.ok) {
-        const blob = await response.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = version.fileName
-        document.body.appendChild(a)
-        a.click()
-        window.URL.revokeObjectURL(url)
-        document.body.removeChild(a)
-      }
-    } catch (error) {
-      console.error('Failed to download file:', error)
-      alert('Failed to download file')
-    }
-  }
-
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true)
-    } else if (e.type === 'dragleave') {
-      setDragActive(false)
-    }
-  }
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setDragActive(false)
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setUploadFile(e.dataTransfer.files[0])
-    }
-  }
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setUploadFile(e.target.files[0])
-    }
-  }
-
-  const handleUploadVersion = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!uploadFile) {
-      setError('Please select a file')
-      return
-    }
-
-    const formData = new FormData()
-    formData.append('file', uploadFile)
-
-    setLoadingLocal(true)
-    setError('')
-
-    try {
-      const response = await fetch(`/api/documents/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setCurrentDocument(data.document)
-        setUploadFile(null)
-        alert('New version uploaded successfully!')
-      } else {
-        const data = await response.json()
-        throw new Error(data.error || 'Failed to upload version')
-      }
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
-      setLoadingLocal(false)
-    }
-  }
-
-  const handleAddComment = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!comment.trim()) return
-
-    try {
-      const response = await fetch(`/api/documents/${id}/comments`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ text: comment })
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setComments([data.comment, ...comments])
-        setComment('')
-      }
-    } catch (error) {
-      console.error('Failed to add comment:', error)
-    }
-  }
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
-  }
-
-  const getFileIcon = (fileName: string, className: string) => {
-    const ext = fileName.split('.').pop()?.toLowerCase()
-    if (ext === 'pdf') {
-      return (
-        <svg className={className} fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M4 4a2 2 0 012-2v4a2 2 0 012 2V4zm2 6a2 2 0 012-2v4a2 2 0 01-2 2v-4zM8 4a2 2 0 012-2v4a2 2 0 01-2 2V4zm2 6a2 2 0 012-2v4a2 2 0 01-2 2v-4z" clipRule="evenodd" />
-        </svg>
-      )
-    }
-    if (ext === 'doc' || ext === 'docx') {
-      return (
-        <svg className={className} fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M4 4a2 2 0 012-2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2h2zm-2 6a2 2 0 012-2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-4a2 2 0 012-2h2zm8-6a2 2 0 012-2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V4a2 2 0 012-2h2zm-2 6a2 2 0 012-2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4a2 2 0 012-2h2z" clipRule="evenodd" />
-        </svg>
-      )
-    }
-    if (ext === 'xls' || ext === 'xlsx') {
-      return (
-        <svg className={className} fill="currentColor" viewBox="0 0 20 20">
-          <path d="M2 11a1 1 0 011-1v2a1 1 0 11-2 0v-2a1 1 0 011-1zm5-4a1 1 0 011-1v2a1 1 0 11-2 0V7a1 1 0 011-1zM5 9a1 1 0 011-1v2a1 1 0 11-2 0V9a1 1 0 011-1zm6 3a1 1 0 011-1v1a1 1 0 11-2 0v-1a1 1 0 011-1zm-2 5a1 1 0 011-1v2a1 1 0 11-2 0v-2a1 1 0 011-1zm3 2a1 1 0 011-1v2a1 1 0 11-2 0v-2a1 1 0 011-1zm-5 5a1 1 0 011-1v2a1 1 0 11-2 0v-2a1 1 0 011-1z" />
-        </svg>
-      )
-    }
-    return (
-      <svg className={className} fill="currentColor" viewBox="0 0 20 20">
-        <path fillRule="evenodd" d="M4 4a2 2 0 012-2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2h2zm-2 6a2 2 0 012-2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-4a2 2 0 012-2h2zm8-6a2 2 0 012-2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V4a2 2 0 012-2h2zm-2 6a2 2 0 012-2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4a2 2 0 012-2h2z" clipRule="evenodd" />
-      </svg>
-    )
-  }
-
-  if (!isHydrated || !isAuthenticated || !currentDocument) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    )
-  }
-
-  const currentVersion = currentDocument.versions?.find(v => v.id === currentDocument.currentVersionId)
-  const isAuthor = currentDocument.createdBy.id === user?.id
-  const isReviewer = user?.role === 'REVIEWER' || user?.role === 'APPROVER' || user?.role === 'ADMIN'
-  const workflowInstance = currentDocument.workflowInstances?.[0]
-  const currentStep = workflowInstance?.steps?.find((step: any) => step.stepOrder === workflowInstance.currentStep)
-  const isAssignedToStep = currentStep?.assignedToId === user?.id
+   }, [isAuthenticated, isHydrated, loadDocument, loadComments])
 
   return (
-    <LayoutComponent>
+    <AdminLayout>
       <div className="space-y-6">
         <div className="flex justify-between items-start">
           <div>
@@ -572,6 +400,6 @@ export default function DocumentViewPage({ params }: { params: Promise<{ id: str
           </div>
         </div>
       </div>
-    </LayoutComponent>
+    </AdminLayout>
   )
 }

@@ -5,7 +5,6 @@ import { useAuthStore, useDocumentStore } from '@/lib/store'
 import { getStatusColor, getStatusLabel } from '@/lib/permissions'
 import { format } from 'date-fns'
 import Link from 'next/link'
-import { Layout } from '@/components/layout/Layout'
 import { AdminLayout } from '@/components/layout/AdminLayout'
 import { NewDocumentModal } from '@/components/modals/NewDocumentModal'
 
@@ -56,14 +55,10 @@ export default function DashboardPage() {
     if (isHydrated && isAuthenticated) {
       loadDocuments()
     }
-  }, [isAuthenticated, isHydrated, loadDocuments])
-
-
-
-  const LayoutComponent = user?.role === 'ADMIN' ? AdminLayout : Layout
+   }, [isAuthenticated, isHydrated, loadDocuments])
 
   return (
-    <LayoutComponent>
+    <AdminLayout>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
@@ -204,6 +199,6 @@ export default function DashboardPage() {
         onClose={() => setIsModalOpen(false)}
         onDocumentCreated={loadDocuments}
       />
-    </LayoutComponent>
+    </AdminLayout>
   )
 }
