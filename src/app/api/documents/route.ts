@@ -81,8 +81,13 @@ export async function GET(request: NextRequest) {
             id: true,
             username: true,
             name: true,
-            role: true,
-            department: true
+            role: true
+          }
+        },
+        department: {
+          select: {
+            id: true,
+            name: true
           }
         },
         _count: {
@@ -118,6 +123,9 @@ export async function POST(request: NextRequest) {
     const title = formData.get('title') as string
     const type = formData.get('type') as string
     const file = formData.get('file') as File
+    const departmentId = formData.get('departmentId') as string | null
+    const priority = formData.get('priority') as string
+    const timelineSteps = formData.get('timelineSteps') as string | null
 
     if (!title || !type || !file) {
       return NextResponse.json(
@@ -134,6 +142,8 @@ export async function POST(request: NextRequest) {
         type,
         currentStatus: 'DRAFT',
         createdById: user.userId,
+        departmentId: departmentId || null,
+        priority: (priority as any) || 'MEDIUM',
         versions: {
           create: {
             versionNumber: 1,
@@ -151,8 +161,13 @@ export async function POST(request: NextRequest) {
             id: true,
             username: true,
             name: true,
-            role: true,
-            department: true
+            role: true
+          }
+        },
+        department: {
+          select: {
+            id: true,
+            name: true
           }
         },
         versions: {
@@ -178,6 +193,25 @@ export async function POST(request: NextRequest) {
         currentVersionId: document.versions[0].id
       }
     })
+
+    if (timelineSteps) {
+      const steps = JSON.parse(timelineSteps) as Array<{ departmentId: string | null, role: string }>
+
+      const workflowInstance = await prisma.workflowInstance.create({
+        data: {
+          documentId: document.id,
+          currentStep: 1,
+          steps: {
+            create: steps.map((step, index) => ({
+              stepOrder: index + 1,
+              departmentId: step.departmentId,
+              role: step.role as any,
+              assignedToId: user.userId
+            }))
+          }
+        }
+      })
+    }
 
     return NextResponse.json({ document }, { status: 201 })
   } catch (error) {

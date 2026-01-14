@@ -3,6 +3,19 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuthStore } from '@/lib/store'
 
+interface Department {
+  id: string
+  name: string
+}
+
+interface TimelineStep {
+  id: string
+  stepOrder: number
+  departmentId: string | null
+  departmentName: string
+  role: 'ADMIN' | 'EDITOR' | 'APPROVER'
+}
+
 interface NewDocumentModalProps {
   isOpen: boolean
   onClose: () => void
@@ -14,12 +27,47 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
   const titleInputRef = useRef<HTMLInputElement>(null)
   const [formData, setFormData] = useState({
     title: '',
-    type: 'Proposal'
+    type: 'Proposal',
+    departmentId: '',
+    priority: 'MEDIUM'
+  })
+  const [departments, setDepartments] = useState<Department[]>([])
+  const [timelineSteps, setTimelineSteps] = useState<TimelineStep[]>([])
+  const [stepToAdd, setStepToAdd] = useState({
+    departmentId: '',
+    role: 'APPROVER' as const
   })
   const [file, setFile] = useState<File | null>(null)
   const [dragActive, setDragActive] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [loadingDepartments, setLoadingDepartments] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (isOpen && titleInputRef.current) {
+      titleInputRef.current.focus()
+      loadDepartments()
+    }
+  }, [isOpen])
+
+  const loadDepartments = async () => {
+    setLoadingDepartments(true)
+    try {
+      const response = await fetch('/api/departments', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setDepartments(data.departments)
+      }
+    } catch (error) {
+      console.error('Failed to load departments:', error)
+    } finally {
+      setLoadingDepartments(false)
+    }
+  }
 
   useEffect(() => {
     if (isOpen && titleInputRef.current) {
@@ -75,6 +123,12 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
     formDataToSend.append('title', formData.title)
     formDataToSend.append('type', formData.type)
     formDataToSend.append('file', file)
+    formDataToSend.append('departmentId', formData.departmentId)
+    formDataToSend.append('priority', formData.priority)
+    formDataToSend.append('timelineSteps', JSON.stringify(timelineSteps.map(step => ({
+      departmentId: step.departmentId,
+      role: step.role
+    }))))
 
     setLoading(true)
     setError('')
@@ -97,13 +151,61 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
       onDocumentCreated()
       onClose()
       // Reset form
-      setFormData({ title: '', type: 'Proposal' })
+      setFormData({ title: '', type: 'Proposal', departmentId: '', priority: 'MEDIUM' })
+      setTimelineSteps([])
+      setStepToAdd({ departmentId: '', role: 'APPROVER' })
       setFile(null)
     } catch (err: any) {
       setError(err.message)
     } finally {
       setLoading(false)
     }
+  }
+
+  const addTimelineStep = () => {
+    if (!stepToAdd.departmentId) {
+      setError('Please select a department for the review step')
+      return
+    }
+
+    const department = departments.find(d => d.id === stepToAdd.departmentId)
+    if (!department) return
+
+    const newStep: TimelineStep = {
+      id: Date.now().toString(),
+      stepOrder: timelineSteps.length + 1,
+      departmentId: stepToAdd.departmentId,
+      departmentName: department.name,
+      role: stepToAdd.role
+    }
+
+    setTimelineSteps([...timelineSteps, newStep])
+    setStepToAdd({ departmentId: '', role: 'APPROVER' })
+    setError('')
+  }
+
+  const removeTimelineStep = (stepId: string) => {
+    setTimelineSteps(timelineSteps.filter(step => step.id !== stepId))
+    setTimelineSteps(prev => prev.map((step, index) => ({
+      ...step,
+      stepOrder: index + 1
+    })))
+  }
+
+  const moveTimelineStep = (index: number, direction: 'up' | 'down') => {
+    const newSteps = [...timelineSteps]
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+
+    if (targetIndex < 0 || targetIndex >= newSteps.length) return
+
+    const temp = newSteps[index]
+    newSteps[index] = newSteps[targetIndex]
+    newSteps[targetIndex] = temp
+
+    setTimelineSteps(newSteps.map((step, idx) => ({
+      ...step,
+      stepOrder: idx + 1
+    })))
   }
 
   const formatFileSize = (bytes: number) => {
@@ -186,37 +288,176 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
                 <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
                   Document Title
                 </label>
-                 <input
-                   ref={titleInputRef}
-                   id="title"
-                   type="text"
-                   value={formData.title}
-                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                   required
-                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
-                   placeholder="Enter document title"
-                   aria-describedby={error ? "error-message" : undefined}
-                 />
+                  <input
+                    ref={titleInputRef}
+                    id="title"
+                    type="text"
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
+                    placeholder="Enter document title"
+                    aria-describedby={error ? "error-message" : undefined}
+                  />
               </div>
 
               <div>
                 <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">
                   Document Type
                 </label>
-                 <select
-                   id="type"
-                   value={formData.type}
-                   onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
-                 >
-                  <option value="Proposal">Proposal</option>
-                  <option value="Report">Report</option>
-                  <option value="Contract">Contract</option>
-                  <option value="Memo">Memo</option>
-                  <option value="Policy">Policy</option>
-                  <option value="Other">Other</option>
+                  <select
+                    id="type"
+                    value={formData.type}
+                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
+                  >
+                   <option value="Proposal">Proposal</option>
+                   <option value="Report">Report</option>
+                   <option value="Contract">Contract</option>
+                   <option value="Memo">Memo</option>
+                   <option value="Policy">Policy</option>
+                   <option value="Other">Other</option>
+                 </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="department" className="block text-sm font-medium text-gray-700 mb-1">
+                  Department <span className="text-gray-400 text-xs">(Optional - limits visibility)</span>
+                </label>
+                <select
+                  id="department"
+                  value={formData.departmentId}
+                  onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
+                  disabled={loadingDepartments}
+                >
+                  <option value="">All Departments</option>
+                  {loadingDepartments ? (
+                    <option disabled>Loading...</option>
+                  ) : (
+                    departments.map((dept) => (
+                      <option key={dept.id} value={dept.id}>{dept.name}</option>
+                    ))
+                  )}
                 </select>
               </div>
+
+              <div>
+                <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-1">
+                  Priority
+                </label>
+                <select
+                  id="priority"
+                  value={formData.priority}
+                  onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
+                >
+                  <option value="LOW">Low</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="HIGH">High</option>
+                  <option value="URGENT">Urgent</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="border rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-medium text-gray-900">Review Timeline</h4>
+                <span className="text-xs text-gray-500">Configure approval steps in order</span>
+              </div>
+
+              {timelineSteps.length > 0 && (
+                <div className="space-y-2 mb-4">
+                  {timelineSteps.map((step, index) => (
+                    <div
+                      key={step.id}
+                      className="flex items-center justify-between bg-gray-50 p-3 rounded-md"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <span className="flex items-center justify-center w-6 h-6 bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-full">
+                          {step.stepOrder}
+                        </span>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{step.departmentName}</p>
+                          <p className="text-xs text-gray-500 capitalize">{step.role.toLowerCase()}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          type="button"
+                          onClick={() => moveTimelineStep(index, 'up')}
+                          disabled={index === 0}
+                          className="p-1 hover:bg-gray-200 rounded disabled:opacity-30"
+                          title="Move up"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveTimelineStep(index, 'down')}
+                          disabled={index === timelineSteps.length - 1}
+                          className="p-1 hover:bg-gray-200 rounded disabled:opacity-30"
+                          title="Move down"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeTimelineStep(step.id)}
+                          className="p-1 text-red-600 hover:bg-red-50 rounded"
+                          title="Remove step"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <select
+                  value={stepToAdd.departmentId}
+                  onChange={(e) => setStepToAdd({ ...stepToAdd, departmentId: e.target.value })}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-gray-900"
+                  disabled={loadingDepartments}
+                >
+                  <option value="">Select department to add...</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>{dept.name}</option>
+                  ))}
+                </select>
+                <select
+                  value={stepToAdd.role}
+                  onChange={(e) => setStepToAdd({ ...stepToAdd, role: e.target.value as any })}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-gray-900"
+                >
+                  <option value="APPROVER">Approver</option>
+                  <option value="EDITOR">Editor</option>
+                  <option value="ADMIN">Admin</option>
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={addTimelineStep}
+                disabled={!stepToAdd.departmentId}
+                className="mt-2 w-full px-3 py-2 border border-indigo-300 text-indigo-700 rounded-md hover:bg-indigo-50 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                + Add Review Step
+              </button>
+              {timelineSteps.length === 0 && (
+                <p className="text-xs text-gray-500 text-center mt-2">
+                  No review steps configured. Document will be created without a workflow.
+                </p>
+              )}
             </div>
 
             <div>

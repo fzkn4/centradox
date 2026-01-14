@@ -23,6 +23,13 @@ enum DocumentStatus {
   FINAL
 }
 
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
 enum WorkflowStepStatus {
   PENDING
   IN_PROGRESS
@@ -38,6 +45,7 @@ model Department {
   updatedAt   DateTime @updatedAt
 
   users         User[]         @relation("UserDepartments")
+  documents     Document[]     @relation("DepartmentDocuments")
   workflowSteps WorkflowStep[] @relation("DepartmentWorkflowSteps")
 }
 
@@ -65,11 +73,15 @@ model Document {
   currentStatus     DocumentStatus    @default(DRAFT)
   currentVersionId  String?
   lockedBy          String?
+  priority          Priority          @default(MEDIUM)
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
   createdBy    User              @relation("CreatedDocuments", fields: [createdById], references: [id])
   createdById   String
+
+  department   Department?       @relation("DepartmentDocuments", fields: [departmentId], references: [id])
+  departmentId String?
 
   versions          DocumentVersion[]
   workflowInstances WorkflowInstance[]
