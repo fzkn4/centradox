@@ -1,0 +1,270 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { verifyToken, getTokenFromRequest } from '@/lib/auth'
+import { writeFile, mkdir } from 'fs/promises'
+import { join } from 'path'
+import { existsSync } from 'fs'
+
+async function getUserFromRequest(request: NextRequest) {
+  const token = getTokenFromRequest(request)
+  if (!token) return null
+
+  const payload = verifyToken(token)
+  if (!payload) return null
+
+  return payload
+}
+
+async function ensureUploadsDir() {
+  const uploadsDir = join(process.cwd(), 'public', 'uploads')
+  if (!existsSync(uploadsDir)) {
+    await mkdir(uploadsDir, { recursive: true })
+  }
+  return uploadsDir
+}
+
+async function saveFile(file: File): Promise<{ filePath: string; fileName: string; fileSize: number; mimeType: string }> {
+  const uploadsDir = await ensureUploadsDir()
+  const bytes = await file.arrayBuffer()
+  const buffer = Buffer.from(bytes)
+  const uniqueFileName = `${Date.now()}-${file.name}`
+  const filePath = join(uploadsDir, uniqueFileName)
+
+  await writeFile(filePath, buffer)
+
+  return {
+    filePath: `/uploads/${uniqueFileName}`,
+    fileName: file.name,
+    fileSize: buffer.length,
+    mimeType: file.type
+  }
+}
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await getUserFromRequest(request)
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { id } = await params
+    const formData = await request.formData()
+
+    const action = formData.get('action') as string
+    const comment = formData.get('comment') as string
+    const file = formData.get('file') as File | null
+
+    if (action !== 'complete-step') {
+      return NextResponse.json(
+        { error: 'Invalid action' },
+        { status: 400 }
+      )
+    }
+
+    if (!comment || comment.trim() === '') {
+      return NextResponse.json(
+        { error: 'Comment is required' },
+        { status: 400 }
+      )
+    }
+
+    const document = await prisma.document.findUnique({
+      where: { id },
+      include: {
+        createdBy: true,
+        workflowInstances: {
+          include: {
+            steps: {
+              include: {
+                assignedTo: true,
+                department: true
+              }
+            }
+          }
+        }
+      }
+    })
+
+    if (!document) {
+      return NextResponse.json({ error: 'Document not found' }, { status: 404 })
+    }
+
+    const workflowInstance = document.workflowInstances[0]
+    if (!workflowInstance) {
+      return NextResponse.json(
+        { error: 'No active workflow' },
+        { status: 400 }
+      )
+    }
+
+    const currentStep = workflowInstance.steps.find(
+      (step: any) => step.stepOrder === workflowInstance.currentStep
+    )
+
+    if (!currentStep) {
+      return NextResponse.json(
+        { error: 'Invalid workflow state' },
+        { status: 400 }
+      )
+    }
+
+    if (currentStep.assignedToId !== user.userId && user.role !== 'ADMIN') {
+      return NextResponse.json(
+        { error: 'Not authorized to complete this step' },
+        { status: 403 }
+      )
+    }
+
+    if (user.role === 'EDITOR' && (!file || file.size === 0)) {
+      return NextResponse.json(
+        { error: 'File upload is required for editors' },
+        { status: 400 }
+      )
+    }
+
+    let versionId: string | null = null
+    let versionNumber: number | null = null
+
+    if (file && file.size > 0) {
+      const latestVersion = await prisma.documentVersion.findFirst({
+        where: { documentId: id },
+        orderBy: { versionNumber: 'desc' }
+      })
+
+      versionNumber = latestVersion ? latestVersion.versionNumber + 1 : 1
+      const fileData = await saveFile(file)
+
+      const newVersion = await prisma.documentVersion.create({
+        data: {
+          versionNumber,
+          fileName: fileData.fileName,
+          fileSize: fileData.fileSize,
+          mimeType: fileData.mimeType,
+          filePath: fileData.filePath,
+          documentId: id,
+          createdById: user.userId
+        }
+      })
+
+      versionId = newVersion.id
+
+      await prisma.document.update({
+        where: { id },
+        data: {
+          currentVersionId: newVersion.id
+        }
+      })
+    }
+
+    await prisma.workflowStep.update({
+      where: { id: currentStep.id },
+      data: {
+        status: 'COMPLETED',
+        completedAt: new Date(),
+        comment: comment.trim()
+      }
+    })
+
+    const nextStep = workflowInstance.steps.find(
+      (step: any) => step.stepOrder === workflowInstance.currentStep + 1
+    )
+
+    if (nextStep) {
+      await prisma.workflowInstance.update({
+        where: { id: workflowInstance.id },
+        data: {
+          currentStep: nextStep.stepOrder
+        }
+      })
+    } else {
+      await prisma.workflowInstance.update({
+        where: { id: workflowInstance.id },
+        data: {
+          completedAt: new Date(),
+          currentStep: 999
+        }
+      })
+
+      await prisma.document.update({
+        where: { id },
+        data: {
+          currentStatus: 'APPROVED'
+        }
+      })
+    }
+
+    const updatedDocument = await prisma.document.findUnique({
+      where: { id },
+      include: {
+        createdBy: {
+          select: {
+            id: true,
+            username: true,
+            name: true,
+            role: true
+          }
+        },
+        department: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        versions: {
+          include: {
+            createdBy: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          },
+          orderBy: {
+            versionNumber: 'desc'
+          }
+        },
+        workflowInstances: {
+          include: {
+            steps: {
+              include: {
+                department: {
+                  select: {
+                    id: true,
+                    name: true
+                  }
+                },
+                assignedTo: {
+                  select: {
+                    id: true,
+                    name: true
+                  }
+                }
+              },
+              orderBy: {
+                stepOrder: 'asc'
+              }
+            }
+          },
+          orderBy: {
+            startedAt: 'desc'
+          }
+        }
+      }
+    })
+
+    return NextResponse.json({
+      document: updatedDocument,
+      versionId,
+      versionNumber
+    })
+  } catch (error) {
+    console.error('Complete step error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
