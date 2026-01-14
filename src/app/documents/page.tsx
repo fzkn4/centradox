@@ -4,14 +4,16 @@ import { useEffect, useState, useCallback } from 'react'
 import { useAuthStore, useDocumentStore } from '@/lib/store'
 import { getStatusColor, getStatusLabel } from '@/lib/permissions'
 import { format } from 'date-fns'
-import Link from 'next/link'
 import { AdminLayout } from '@/components/layout/AdminLayout'
 import { NewDocumentModal } from '@/components/modals/NewDocumentModal'
+import { ViewDocumentModal } from '@/components/modals/ViewDocumentModal'
 
 export default function AllDocumentsPage() {
   const { user, isAuthenticated, token, isHydrated } = useAuthStore()
   const { documents, setDocuments, setLoading, isLoading } = useDocumentStore()
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [viewModalOpen, setViewModalOpen] = useState(false)
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null)
 
   const loadDocuments = useCallback(async () => {
     setLoading(true)
@@ -113,12 +115,15 @@ export default function AllDocumentsPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <Link
-                          href={`/documents/${doc.id}`}
+                        <button
+                          onClick={() => {
+                            setSelectedDocumentId(doc.id)
+                            setViewModalOpen(true)
+                          }}
                           className="text-indigo-600 hover:text-indigo-900"
                         >
                           View
-                        </Link>
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -133,6 +138,15 @@ export default function AllDocumentsPage() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onDocumentCreated={loadDocuments}
+      />
+
+      <ViewDocumentModal
+        isOpen={viewModalOpen}
+        onClose={() => {
+          setViewModalOpen(false)
+          setSelectedDocumentId(null)
+        }}
+        documentId={selectedDocumentId}
       />
     </AdminLayout>
   )

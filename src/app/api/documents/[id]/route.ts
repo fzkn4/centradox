@@ -70,8 +70,13 @@ export async function GET(
             id: true,
             username: true,
             name: true,
-            role: true,
-            department: true
+            role: true
+          }
+        },
+        department: {
+          select: {
+            id: true,
+            name: true
           }
         },
         versions: {
@@ -79,7 +84,6 @@ export async function GET(
             createdBy: {
               select: {
                 id: true,
-                username: true,
                 name: true
               }
             }
@@ -106,10 +110,15 @@ export async function GET(
           include: {
             steps: {
               include: {
+                department: {
+                  select: {
+                    id: true,
+                    name: true
+                  }
+                },
                 assignedTo: {
                   select: {
                     id: true,
-                    username: true,
                     name: true
                   }
                 }
@@ -118,6 +127,9 @@ export async function GET(
                 stepOrder: 'asc'
               }
             }
+          },
+          orderBy: {
+            startedAt: 'desc'
           }
         }
       }
@@ -216,8 +228,13 @@ export async function PUT(
             id: true,
             username: true,
             name: true,
-            role: true,
-            department: true
+            role: true
+          }
+        },
+        department: {
+          select: {
+            id: true,
+            name: true
           }
         },
         versions: {
@@ -225,7 +242,6 @@ export async function PUT(
             createdBy: {
               select: {
                 id: true,
-                username: true,
                 name: true
               }
             }
