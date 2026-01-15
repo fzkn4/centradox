@@ -111,9 +111,27 @@ export async function POST(
       )
     }
 
-    if (currentStep.assignedToId !== user.userId && user.role !== 'ADMIN') {
+    if (currentStep.role !== user.role && user.role !== 'ADMIN') {
       return NextResponse.json(
         { error: 'Not authorized to complete this step' },
+        { status: 403 }
+      )
+    }
+
+    const userWithDepartments = await prisma.user.findUnique({
+      where: { id: user.userId },
+      include: {
+        departments: true
+      }
+    })
+
+    const isInDepartment = userWithDepartments?.departments.some(
+      (dept: any) => dept.id === currentStep.departmentId
+    )
+
+    if (!isInDepartment && user.role !== 'ADMIN') {
+      return NextResponse.json(
+        { error: 'You are not in the assigned department' },
         { status: 403 }
       )
     }

@@ -130,8 +130,8 @@ model WorkflowStep {
   workflowInstance  WorkflowInstance @relation(fields: [workflowInstanceId], references: [id], onDelete: Cascade)
   workflowInstanceId String
 
-  assignedTo       User              @relation("AssignedSteps", fields: [assignedToId], references: [id])
-  assignedToId      String
+  assignedTo       User?             @relation("AssignedSteps", fields: [assignedToId], references: [id])
+  assignedToId      String?
 
   department        Department?       @relation("DepartmentWorkflowSteps", fields: [departmentId], references: [id])
 }

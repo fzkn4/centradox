@@ -23,7 +23,7 @@ interface WorkflowStep {
   assignedTo: {
     id: string
     name: string
-  }
+  } | null
 }
 
 interface Document {

@@ -30,7 +30,7 @@ interface WorkflowStep {
   assignedTo: {
     id: string
     name: string
-  }
+  } | null
   completedAt: string | null
   comment: string | null
 }
@@ -301,7 +301,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
 
   const canCompleteStep = doc?.workflowInstances?.[0]?.steps.find(
     (step: any) => step.stepOrder === doc.workflowInstances[0].currentStep
-  )?.assignedTo?.id === user?.id || user?.role === 'ADMIN'
+  )?.role === user?.role || user?.role === 'ADMIN'
 
   const isCurrentStepEditor = doc?.workflowInstances?.[0]?.steps.find(
     (step: any) => step.stepOrder === doc.workflowInstances[0].currentStep
@@ -479,7 +479,12 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                           )}
                         </div>
                         <div className="flex items-center space-x-4 mt-1 text-sm text-gray-600">
-                          <p>Assigned to: {step.assignedTo.name}</p>
+                          <p>
+                            {step.assignedTo
+                              ? `Assigned to: ${step.assignedTo.name}`
+                              : `All ${step.role.toLowerCase()}s in ${step.department?.name || 'General'}`
+                            }
+                          </p>
                           {step.completedAt && (
                             <p>Completed: {format(new Date(step.completedAt), 'MMM dd, yyyy HH:mm')}</p>
                           )}

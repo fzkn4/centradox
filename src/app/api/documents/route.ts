@@ -205,8 +205,7 @@ export async function POST(request: NextRequest) {
             create: steps.map((step, index) => ({
               stepOrder: index + 1,
               departmentId: step.departmentId,
-              role: step.role as any,
-              assignedToId: user.userId
+              role: step.role as any
             }))
           }
         }

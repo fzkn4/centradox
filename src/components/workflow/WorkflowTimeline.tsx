@@ -18,7 +18,7 @@ interface WorkflowStep {
   assignedTo: {
     id: string
     name: string
-  }
+  } | null
 }
 
 interface WorkflowTimelineProps {
@@ -152,8 +152,10 @@ export function WorkflowTimelineVertical({ steps, currentStep, userDepartmentSte
               </div>
               <div className="mt-1 flex items-center space-x-4 text-xs text-gray-500">
                 <span className="capitalize">{step.role.toLowerCase()}</span>
-                {step.assignedTo && (
+                {step.assignedTo ? (
                   <span>Assigned to: {step.assignedTo.name}</span>
+                ) : (
+                  <span>All {step.role.toLowerCase()}s in {step.department?.name || 'General'}</span>
                 )}
                 {step.completedAt && (
                   <span>Completed: {format(new Date(step.completedAt), 'MMM dd, yyyy')}</span>
