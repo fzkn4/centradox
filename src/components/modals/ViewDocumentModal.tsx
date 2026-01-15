@@ -641,16 +641,45 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Comment <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    value={completeComment}
-                    onChange={(e) => setCompleteComment(e.target.value)}
-                    rows={4}
-                    className="shadow-sm block w-full focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm border border-gray-300 rounded-md"
-                    placeholder="Add your comments, feedback, or approval notes..."
-                  />
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Comment <span className="text-red-500">*</span>
+                    </label>
+                    <span className={`text-xs ${completeComment.length > 500 ? 'text-amber-600' : 'text-gray-400'}`}>
+                      {completeComment.length}/500
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <textarea
+                      value={completeComment}
+                      onChange={(e) => setCompleteComment(e.target.value)}
+                      rows={4}
+                      maxLength={500}
+                      className={`block w-full sm:text-sm rounded-lg border transition-all duration-200 resize-none focus:outline-none p-4 ${
+                        completeComment.trim()
+                          ? 'border-indigo-300 focus:border-indigo-500 focus:ring-indigo-500'
+                          : 'border-gray-300 focus:border-indigo-500 focus:ring-indigo-500'
+                      } shadow-sm focus:ring-2 text-gray-900 placeholder:text-gray-400`}
+                      placeholder="Add your comments, feedback, or approval notes..."
+                    />
+                    {completeComment && (
+                      <button
+                        type="button"
+                        onClick={() => setCompleteComment('')}
+                        className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 transition-colors"
+                        title="Clear comment"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                  <p className={`mt-1 text-xs ${completeComment.length > 450 && completeComment.length <= 500 ? 'text-amber-600' : completeComment.length > 500 ? 'text-red-600' : 'text-gray-400'}`}>
+                    {completeComment.length === 0 && 'Start typing to add your comment'}
+                    {completeComment.length > 0 && completeComment.length < 450 && 'Keep your comment concise and relevant'}
+                    {completeComment.length > 450 && completeComment.length <= 500 && `You're close to the character limit (${500 - completeComment.length} remaining)`}
+                  </p>
                 </div>
 
                 {submitError && (
