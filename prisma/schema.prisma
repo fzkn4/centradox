@@ -74,6 +74,7 @@ model Document {
   currentVersionId  String?
   lockedBy          String?
   priority          Priority          @default(MEDIUM)
+  deadline          DateTime?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 

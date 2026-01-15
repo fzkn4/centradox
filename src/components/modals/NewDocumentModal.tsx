@@ -29,7 +29,8 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
     title: '',
     type: 'Proposal',
     departmentId: '',
-    priority: 'MEDIUM'
+    priority: 'MEDIUM',
+    deadline: ''
   })
   const [departments, setDepartments] = useState<Department[]>([])
   const [timelineSteps, setTimelineSteps] = useState<TimelineStep[]>([])
@@ -125,6 +126,9 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
     formDataToSend.append('file', file)
     formDataToSend.append('departmentId', formData.departmentId)
     formDataToSend.append('priority', formData.priority)
+    if (formData.deadline) {
+      formDataToSend.append('deadline', formData.deadline)
+    }
     formDataToSend.append('timelineSteps', JSON.stringify(timelineSteps.map(step => ({
       departmentId: step.departmentId,
       role: step.role
@@ -151,7 +155,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
       onDocumentCreated()
       onClose()
       // Reset form
-      setFormData({ title: '', type: 'Proposal', departmentId: '', priority: 'MEDIUM' })
+      setFormData({ title: '', type: 'Proposal', departmentId: '', priority: 'MEDIUM', deadline: '' })
       setTimelineSteps([])
       setStepToAdd({ departmentId: '', role: 'APPROVER' })
       setFile(null)
@@ -321,46 +325,59 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="department" className="block text-sm font-medium text-gray-700 mb-1">
-                  Department <span className="text-gray-400 text-xs">(Optional - limits visibility)</span>
-                </label>
-                <select
-                  id="department"
-                  value={formData.departmentId}
-                  onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
-                  disabled={loadingDepartments}
-                >
-                  <option value="">All Departments</option>
-                  {loadingDepartments ? (
-                    <option disabled>Loading...</option>
-                  ) : (
-                    departments.map((dept) => (
-                      <option key={dept.id} value={dept.id}>{dept.name}</option>
-                    ))
-                  )}
-                </select>
-              </div>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div>
+                 <label htmlFor="department" className="block text-sm font-medium text-gray-700 mb-1">
+                   Department <span className="text-gray-400 text-xs">(Optional - limits visibility)</span>
+                 </label>
+                 <select
+                   id="department"
+                   value={formData.departmentId}
+                   onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
+                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
+                   disabled={loadingDepartments}
+                 >
+                   <option value="">All Departments</option>
+                   {loadingDepartments ? (
+                     <option disabled>Loading...</option>
+                   ) : (
+                     departments.map((dept) => (
+                       <option key={dept.id} value={dept.id}>{dept.name}</option>
+                     ))
+                   )}
+                 </select>
+               </div>
 
-              <div>
-                <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-1">
-                  Priority
-                </label>
-                <select
-                  id="priority"
-                  value={formData.priority}
-                  onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
-                >
-                  <option value="LOW">Low</option>
-                  <option value="MEDIUM">Medium</option>
-                  <option value="HIGH">High</option>
-                  <option value="URGENT">Urgent</option>
-                </select>
-              </div>
-            </div>
+               <div>
+                 <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-1">
+                   Priority
+                 </label>
+                 <select
+                   id="priority"
+                   value={formData.priority}
+                   onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
+                 >
+                   <option value="LOW">Low</option>
+                   <option value="MEDIUM">Medium</option>
+                   <option value="HIGH">High</option>
+                   <option value="URGENT">Urgent</option>
+                 </select>
+               </div>
+             </div>
+
+             <div>
+               <label htmlFor="deadline" className="block text-sm font-medium text-gray-700 mb-1">
+                 Deadline <span className="text-gray-400 text-xs">(Optional - when the document must be finished)</span>
+               </label>
+               <input
+                 id="deadline"
+                 type="datetime-local"
+                 value={formData.deadline}
+                 onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
+               />
+             </div>
 
             <div className="border rounded-lg p-4">
               <div className="flex items-center justify-between mb-3">

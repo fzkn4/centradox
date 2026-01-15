@@ -81,6 +81,139 @@ export default function DocumentViewPage({ params }: { params: Promise<{ id: str
     }
    }, [isAuthenticated, isHydrated, loadDocument, loadComments])
 
+  const currentVersion = currentDocument?.versions?.find((v: any) => v.id === currentDocument.currentVersionId)
+  const workflowInstance = currentDocument?.workflowInstances?.[0]
+  const isAuthor = currentDocument?.createdById === user?.id
+
+  const currentStep = workflowInstance?.steps?.find((s: any) => s.stepOrder === workflowInstance.currentStep)
+  const isReviewer = currentStep?.role === user?.role
+  const isAssignedToStep = currentStep?.assignedToId === user?.id
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
+  }
+
+  const getFileIcon = (fileName: string, className: string) => {
+    const ext = fileName.split('.').pop()?.toLowerCase()
+    if (ext === 'pdf') {
+      return (
+        <svg className={`${className} text-red-500`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0016.586V3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        </svg>
+      )
+    }
+    if (ext === 'doc' || ext === 'docx') {
+      return (
+        <svg className={`${className} text-blue-500`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      )
+    }
+    if (ext === 'xls' || ext === 'xlsx') {
+      return (
+        <svg className={`${className} text-green-500`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      )
+    }
+    return (
+      <svg className={`${className} text-gray-500`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0016.586V3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+      </svg>
+    )
+  }
+
+  const handleDownload = (version: DocumentVersion) => {
+    window.open(version.filePath, '_blank')
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setUploadFile(e.target.files[0])
+    }
+  }
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true)
+    } else if (e.type === 'dragleave') {
+      setDragActive(false)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragActive(false)
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      setUploadFile(e.dataTransfer.files[0])
+    }
+  }
+
+  const handleUploadVersion = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!uploadFile) return
+
+    setLoadingLocal(true)
+    setError('')
+
+    try {
+      const formData = new FormData()
+      formData.append('file', uploadFile)
+
+      const response = await fetch(`/api/documents/${id}`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: formData
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setCurrentDocument(data.document)
+        setUploadFile(null)
+        loadDocument()
+      } else {
+        const error = await response.json()
+        setError(error.error || 'Failed to upload version')
+      }
+    } catch (error) {
+      setError('Failed to upload version')
+    } finally {
+      setLoadingLocal(false)
+    }
+  }
+
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!comment.trim()) return
+
+    try {
+      const response = await fetch(`/api/documents/${id}/comments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ text: comment })
+      })
+
+      if (response.ok) {
+        setComment('')
+        loadComments()
+      }
+    } catch (error) {
+      setError('Failed to add comment')
+    }
+  }
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -92,17 +225,25 @@ export default function DocumentViewPage({ params }: { params: Promise<{ id: str
             >
               ← Back to Dashboard
             </Link>
-            <h1 className="text-3xl font-bold text-gray-900">{currentDocument.title}</h1>
+            <h1 className="text-3xl font-bold text-gray-900">{currentDocument?.title}</h1>
             <div className="flex items-center space-x-4 mt-2 text-sm text-gray-600">
-              <span>Type: {currentDocument.type}</span>
+              <span>Type: {currentDocument?.type}</span>
               <span>•</span>
-              <span>Author: {currentDocument.createdBy.name}</span>
+              <span>Author: {currentDocument?.createdBy?.name}</span>
               <span>•</span>
-              <span>Created: {format(new Date(currentDocument.createdAt), 'MMM dd, yyyy')}</span>
+              <span>Created: {currentDocument?.createdAt ? format(new Date(currentDocument.createdAt), 'MMM dd, yyyy') : ''}</span>
+              {currentDocument?.deadline && (
+                <>
+                  <span>•</span>
+                  <span className={`font-semibold ${new Date(currentDocument.deadline) < new Date() ? 'text-red-600 bg-red-50 px-2 py-0.5 rounded' : 'text-orange-600 bg-orange-50 px-2 py-0.5 rounded'}`}>
+                    Deadline: {format(new Date(currentDocument.deadline), 'MMM dd, yyyy HH:mm')}
+                  </span>
+                </>
+              )}
             </div>
           </div>
-          <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${getStatusColor(currentDocument.currentStatus)}`}>
-            {getStatusLabel(currentDocument.currentStatus)}
+          <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${getStatusColor(currentDocument?.currentStatus || 'DRAFT')}`}>
+            {getStatusLabel(currentDocument?.currentStatus || 'DRAFT')}
           </span>
         </div>
 
@@ -189,7 +330,7 @@ export default function DocumentViewPage({ params }: { params: Promise<{ id: str
           <div className="space-y-6">
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Upload New Version</h2>
-              {(currentDocument.currentStatus === 'DRAFT' || currentDocument.currentStatus === 'CHANGES_REQUESTED') && isAuthor && (
+              {(currentDocument?.currentStatus === 'DRAFT' || currentDocument?.currentStatus === 'CHANGES_REQUESTED') && isAuthor && (
                 <form onSubmit={handleUploadVersion}>
                   <div
                     onDragEnter={handleDrag}
@@ -254,7 +395,7 @@ export default function DocumentViewPage({ params }: { params: Promise<{ id: str
                   </button>
                 </form>
               )}
-              {!((currentDocument.currentStatus === 'DRAFT' || currentDocument.currentStatus === 'CHANGES_REQUESTED') && isAuthor) && (
+              {!((currentDocument?.currentStatus === 'DRAFT' || currentDocument?.currentStatus === 'CHANGES_REQUESTED') && isAuthor) && (
                 <p className="text-sm text-gray-500 text-center py-4">
                   Only document author can upload new versions when in DRAFT or CHANGES_REQUESTED status
                 </p>
@@ -264,7 +405,7 @@ export default function DocumentViewPage({ params }: { params: Promise<{ id: str
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Actions</h2>
 
-              {currentDocument.currentStatus === 'DRAFT' && isAuthor && (
+              {currentDocument?.currentStatus === 'DRAFT' && isAuthor && (
                 <button
                   onClick={() => {
                     fetch(`/api/documents/${id}/workflow`, {
@@ -285,7 +426,7 @@ export default function DocumentViewPage({ params }: { params: Promise<{ id: str
                 </button>
               )}
 
-              {currentDocument.currentStatus === 'FOR_REVIEW' && isReviewer && isAssignedToStep && (
+              {currentDocument?.currentStatus === 'FOR_REVIEW' && isReviewer && isAssignedToStep && (
                 <>
                   <button
                     onClick={() => {
@@ -369,11 +510,11 @@ export default function DocumentViewPage({ params }: { params: Promise<{ id: str
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Versions</h2>
               <div className="space-y-2">
-                {currentDocument.versions?.map((version: DocumentVersion) => (
+                {currentDocument?.versions?.map((version: DocumentVersion) => (
                   <div
                     key={version.id}
                     className={`flex justify-between items-center p-3 rounded border ${
-                      version.id === currentDocument.currentVersionId
+                      version.id === currentDocument?.currentVersionId
                         ? 'bg-indigo-50 border-indigo-300'
                         : 'border-gray-200 hover:border-indigo-200 hover:bg-gray-50'
                     }`}

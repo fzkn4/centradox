@@ -125,6 +125,7 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File
     const departmentId = formData.get('departmentId') as string | null
     const priority = formData.get('priority') as string
+    const deadline = formData.get('deadline') as string | null
     const timelineSteps = formData.get('timelineSteps') as string | null
 
     if (!title || !type || !file) {
@@ -144,6 +145,7 @@ export async function POST(request: NextRequest) {
         createdById: user.userId,
         departmentId: departmentId || null,
         priority: (priority as any) || 'MEDIUM',
+        deadline: deadline ? new Date(deadline) : null,
         versions: {
           create: {
             versionNumber: 1,

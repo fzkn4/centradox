@@ -52,9 +52,13 @@ interface Document {
   currentStatus: string
   currentVersionId: string | null
   lockedBy: string | null
+  priority: string
+  deadline: string | null
   createdAt: string
   updatedAt: string
+  createdById: string
   createdBy: User
+  department?: { id: string; name: string }
   versions?: any[]
   comments?: any[]
   workflowInstances?: any[]

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useAuthStore, useDocumentStore } from '@/lib/store'
 import { getStatusColor, getStatusLabel } from '@/lib/permissions'
 import { format } from 'date-fns'
@@ -11,10 +11,10 @@ import { ViewDocumentModal } from '@/components/modals/ViewDocumentModal'
 export default function DashboardPage() {
   const { user, isAuthenticated, token, isHydrated } = useAuthStore()
   const { documents, setDocuments, setLoading, isLoading } = useDocumentStore()
-  const [filter, setFilter] = useState('all')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [viewModalOpen, setViewModalOpen] = useState(false)
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null)
+  const [filter, setFilter] = useState('all')
 
   const loadDocuments = useCallback(async () => {
     setLoading(true)
