@@ -255,8 +255,8 @@ export default function LoginPage() {
               </div>
               <div className="relative flex justify-center text-sm">
                 <span className="px-4 bg-white text-gray-500">
-                  New to CentraDox?
-                </span>
+                  New to E-Document?
+                 </span>
               </div>
             </div>
 
