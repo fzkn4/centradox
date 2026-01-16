@@ -225,6 +225,8 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
         throw new Error(data.error || 'Failed to complete step')
       }
 
+      window.dispatchEvent(new Event('documentStepCompleted'))
+
       await loadDocument()
       setActiveTab('workflow')
       setCompleteComment('')

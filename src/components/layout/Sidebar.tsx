@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuthStore } from '@/lib/store'
+import { useState, useEffect } from 'react'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2 2z', roles: ['ADMIN', 'EDITOR', 'APPROVER'] },
@@ -18,7 +19,37 @@ function classNames(...classes: string[]) {
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { user, logout } = useAuthStore()
+  const { user, logout, token, isAuthenticated } = useAuthStore()
+  const [pendingCount, setPendingCount] = useState(0)
+
+  const fetchPendingCount = async () => {
+    try {
+      const response = await fetch('/api/my-documents', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setPendingCount(data.documents.length)
+      } else {
+        setPendingCount(0)
+      }
+    } catch (error) {
+      console.error('Failed to fetch pending count:', error)
+      setPendingCount(0)
+    }
+  }
+
+  useEffect(() => {
+    if (token && isAuthenticated) {
+      fetchPendingCount()
+    }
+  }, [token, isAuthenticated])
+
+  useEffect(() => {
+    const handleStepCompleted = () => fetchPendingCount()
+    window.addEventListener('documentStepCompleted', handleStepCompleted)
+    return () => window.removeEventListener('documentStepCompleted', handleStepCompleted)
+  }, [])
 
   return (
     <div className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0">
@@ -60,6 +91,11 @@ export function Sidebar() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
                   </svg>
                   {item.name}
+                  {item.name === 'My Documents' && pendingCount > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+                      {pendingCount > 99 ? '99+' : pendingCount}
+                    </span>
+                  )}
                 </Link>
               )
             })}
