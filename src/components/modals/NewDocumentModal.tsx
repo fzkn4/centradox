@@ -16,6 +16,11 @@ interface TimelineStep {
   role: 'ADMIN' | 'EDITOR' | 'APPROVER'
 }
 
+interface SelectedDepartment {
+  id: string
+  name: string
+}
+
 interface NewDocumentModalProps {
   isOpen: boolean
   onClose: () => void
@@ -28,7 +33,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
   const [formData, setFormData] = useState({
     title: '',
     type: 'Proposal',
-    departmentId: '',
+    departmentIds: [] as string[],
     priority: 'MEDIUM',
     deadline: ''
   })
@@ -43,6 +48,8 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
   const [loading, setLoading] = useState(false)
   const [loadingDepartments, setLoadingDepartments] = useState(false)
   const [error, setError] = useState('')
+  const [isDepartmentDropdownOpen, setIsDepartmentDropdownOpen] = useState(false)
+  const [selectedDepartments, setSelectedDepartments] = useState<SelectedDepartment[]>([])
 
   useEffect(() => {
     if (isOpen && titleInputRef.current) {
@@ -50,6 +57,39 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
       loadDepartments()
     }
   }, [isOpen])
+
+  const handleDepartmentToggle = (dept: Department) => {
+    setSelectedDepartments(prev => {
+      const isSelected = prev.some(d => d.id === dept.id)
+      if (isSelected) {
+        return prev.filter(d => d.id !== dept.id)
+      } else {
+        return [...prev, { id: dept.id, name: dept.name }]
+      }
+    })
+  }
+
+  const handleDepartmentRemove = (deptId: string) => {
+    setSelectedDepartments(prev => prev.filter(d => d.id !== deptId))
+  }
+
+  const handleDepartmentSelectAll = () => {
+    setSelectedDepartments([])
+  }
+
+  useEffect(() => {
+    setFormData(prev => ({ ...prev, departmentIds: selectedDepartments.map(d => d.id) }))
+  }, [selectedDepartments])
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isDepartmentDropdownOpen && !(event.target as Element).closest('.department-dropdown')) {
+        setIsDepartmentDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isDepartmentDropdownOpen])
 
   const loadDepartments = async () => {
     setLoadingDepartments(true)
@@ -124,7 +164,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
     formDataToSend.append('title', formData.title)
     formDataToSend.append('type', formData.type)
     formDataToSend.append('file', file)
-    formDataToSend.append('departmentId', formData.departmentId)
+    formDataToSend.append('departmentIds', JSON.stringify(formData.departmentIds))
     formDataToSend.append('priority', formData.priority)
     if (formData.deadline) {
       formDataToSend.append('deadline', formData.deadline)
@@ -155,10 +195,12 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
       onDocumentCreated()
       onClose()
       // Reset form
-      setFormData({ title: '', type: 'Proposal', departmentId: '', priority: 'MEDIUM', deadline: '' })
+      setFormData({ title: '', type: 'Proposal', departmentIds: [], priority: 'MEDIUM', deadline: '' })
       setTimelineSteps([])
       setStepToAdd({ departmentId: '', role: 'APPROVER' })
       setFile(null)
+      setSelectedDepartments([])
+      setIsDepartmentDropdownOpen(false)
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -325,28 +367,76 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
               </div>
             </div>
 
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               <div>
-                 <label htmlFor="department" className="block text-sm font-medium text-gray-700 mb-1">
-                   Department <span className="text-gray-400 text-xs">(Optional - limits visibility)</span>
-                 </label>
-                 <select
-                   id="department"
-                   value={formData.departmentId}
-                   onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
-                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
-                   disabled={loadingDepartments}
-                 >
-                   <option value="">All Departments</option>
-                   {loadingDepartments ? (
-                     <option disabled>Loading...</option>
-                   ) : (
-                     departments.map((dept) => (
-                       <option key={dept.id} value={dept.id}>{dept.name}</option>
-                     ))
-                   )}
-                 </select>
-               </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Departments <span className="text-gray-400 text-xs">(Optional - select which departments can view this document)</span>
+                  </label>
+                  <div className="relative department-dropdown">
+                    <div className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900 bg-white cursor-pointer" onClick={() => setIsDepartmentDropdownOpen(!isDepartmentDropdownOpen)}>
+                      <div className="flex flex-wrap gap-1">
+                        {selectedDepartments.length > 0 ? (
+                          selectedDepartments.map((dept) => (
+                            <span key={dept.id} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
+                              {dept.name}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleDepartmentRemove(dept.id)
+                                }}
+                                className="ml-1 inline-flex items-center p-0.5 rounded-full text-indigo-400 hover:bg-indigo-200 hover:text-indigo-500"
+                              >
+                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                </svg>
+                              </button>
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-gray-400">All Departments</span>
+                        )}
+                      </div>
+                      <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                        <svg className="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    </div>
+                    {isDepartmentDropdownOpen && (
+                      <div className="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm">
+                        <div className="px-3 py-2">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                              checked={selectedDepartments.length === 0}
+                              onChange={() => handleDepartmentSelectAll()}
+                            />
+                            <span className="ml-2 text-sm text-gray-700">All Departments</span>
+                          </label>
+                        </div>
+                        {loadingDepartments ? (
+                          <div className="px-3 py-2 text-sm text-gray-500">Loading...</div>
+                        ) : (
+                          departments.map((dept) => (
+                            <div key={dept.id} className="px-3 py-2">
+                              <label className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                  checked={selectedDepartments.some(d => d.id === dept.id)}
+                                  onChange={() => handleDepartmentToggle(dept)}
+                                />
+                                <span className="ml-2 text-sm text-gray-700">{dept.name}</span>
+                              </label>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
 
                <div>
                  <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-1">
