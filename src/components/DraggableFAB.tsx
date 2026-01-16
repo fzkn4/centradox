@@ -87,36 +87,15 @@ export function DraggableFAB() {
           const data = await response.json()
           const serverNotifications = data.notifications
 
-          // Smart state merging: preserve local read states
-          const mergedNotifications = serverNotifications.map((serverNotif: any) => {
-            const localNotif = notifications.find(n => n.id === serverNotif.id)
-            // Preserve local read state if it exists, otherwise use server state
-            return localNotif
-              ? { ...serverNotif, read: localNotif.read }
-              : serverNotif
-          })
+          // setNotifications now automatically merges with persisted read states
+          setNotifications(serverNotifications)
 
-          // Only update if there are actual changes to prevent unnecessary re-renders
-          const hasChanges = mergedNotifications.length !== notifications.length ||
-            mergedNotifications.some((newNotif: any, index: number) => {
-              const oldNotif = notifications[index]
-              return !oldNotif ||
-                newNotif.id !== oldNotif.id ||
-                newNotif.message !== oldNotif.message ||
-                newNotif.type !== oldNotif.type ||
-                newNotif.createdAt !== oldNotif.createdAt
-            })
-
-          if (hasChanges) {
-            setNotifications(mergedNotifications)
-
-            // Play sound only for truly new notifications (not re-fetched ones)
-            const newUnreadCount = mergedNotifications.filter((n: any) => !n.read).length
-            if (newUnreadCount > previousUnreadCount) {
-              playNotificationSound()
-            }
-            setPreviousUnreadCount(newUnreadCount)
+          // Play sound for new unread notifications
+          const newUnreadCount = serverNotifications.filter((n: any) => !n.read).length
+          if (newUnreadCount > previousUnreadCount) {
+            playNotificationSound()
           }
+          setPreviousUnreadCount(newUnreadCount)
         }
       } catch (error) {
         console.error('Failed to fetch notifications:', error)
@@ -130,7 +109,7 @@ export function DraggableFAB() {
     const interval = setInterval(fetchNotifications, 30000)
 
     return () => clearInterval(interval)
-  }, [setNotifications, previousUnreadCount, token, notifications])
+  }, [setNotifications, previousUnreadCount, token])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

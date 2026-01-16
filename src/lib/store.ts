@@ -96,9 +96,9 @@ export const useDocumentStore = create<DocumentState>((set) => ({
       documents: state.documents.filter((d) => d.id !== id),
       currentDocument: state.currentDocument?.id === id ? null : state.currentDocument
     })),
-  setLoading: (loading) => set({ isLoading: loading }),
-  setError: (error) => set({ error })
-}))
+   setLoading: (loading) => set({ isLoading: loading }),
+   setError: (error) => set({ error })
+ }))
 
 interface Notification {
   id: string
@@ -114,6 +114,7 @@ interface NotificationState {
   unreadCount: number
   isLoading: boolean
   error: string | null
+  readStates: Record<string, boolean> // Persisted read states
   setNotifications: (notifications: Notification[]) => void
   addNotification: (notification: Notification) => void
   markAsRead: (id: string) => void
@@ -121,16 +122,28 @@ interface NotificationState {
   deleteNotification: (id: string) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
+  cleanupReadStates: () => void
 }
 
-export const useNotificationStore = create<NotificationState>((set, get) => ({
-  notifications: [],
-  unreadCount: 0,
-  isLoading: false,
-  error: null,
-  setNotifications: (notifications) => set({
-    notifications,
-    unreadCount: notifications.filter(n => !n.read).length
+export const useNotificationStore = create<NotificationState>()(
+  persist(
+    (set, get) => ({
+      notifications: [],
+      unreadCount: 0,
+      isLoading: false,
+      error: null,
+      readStates: {},
+  setNotifications: (notifications) => set((state) => {
+    // Merge server notifications with persisted read states
+    const mergedNotifications = notifications.map(notification => ({
+      ...notification,
+      read: state.readStates[notification.id] ?? notification.read
+    }))
+
+    return {
+      notifications: mergedNotifications,
+      unreadCount: mergedNotifications.filter(n => !n.read).length
+    }
   }),
   addNotification: (notification) => set((state) => {
     const newNotifications = [notification, ...state.notifications]
@@ -143,20 +156,52 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     const updated = state.notifications.map(n => n.id === id ? { ...n, read: true } : n)
     return {
       notifications: updated,
-      unreadCount: updated.filter(n => !n.read).length
+      unreadCount: updated.filter(n => !n.read).length,
+      readStates: { ...state.readStates, [id]: true }
     }
   }),
-  markAllAsRead: () => set((state) => ({
-    notifications: state.notifications.map(n => ({ ...n, read: true })),
-    unreadCount: 0
-  })),
+  markAllAsRead: () => set((state) => {
+    const readStates = { ...state.readStates }
+    state.notifications.forEach(n => {
+      readStates[n.id] = true
+    })
+    return {
+      notifications: state.notifications.map(n => ({ ...n, read: true })),
+      unreadCount: 0,
+      readStates
+    }
+  }),
   deleteNotification: (id) => set((state) => {
     const filtered = state.notifications.filter(n => n.id !== id)
+    const { [id]: deleted, ...remainingReadStates } = state.readStates
     return {
       notifications: filtered,
-      unreadCount: filtered.filter(n => !n.read).length
+      unreadCount: filtered.filter(n => !n.read).length,
+      readStates: remainingReadStates
     }
   }),
-  setLoading: (loading) => set({ isLoading: loading }),
-  setError: (error) => set({ error })
-}))
+   setLoading: (loading) => set({ isLoading: loading }),
+   setError: (error) => set({ error }),
+   cleanupReadStates: () => set((state) => {
+     // Remove read states for notifications that no longer exist
+     const currentNotificationIds = new Set(state.notifications.map(n => n.id))
+     const cleanedReadStates: Record<string, boolean> = {}
+
+     Object.entries(state.readStates).forEach(([id, read]) => {
+       if (currentNotificationIds.has(id)) {
+         cleanedReadStates[id] = read
+       }
+     })
+
+     return { readStates: cleanedReadStates }
+   })
+ }),
+{
+  name: 'notification-storage',
+  partialize: (state) => ({ readStates: state.readStates }),
+  onRehydrateStorage: () => (state) => {
+    // Handle hydration completion if needed
+    console.log('Notification store rehydrated')
+  }
+}
+))
