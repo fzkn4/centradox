@@ -254,6 +254,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create notifications for department users and admins
+    console.log(`🔄 Starting notification creation for document "${title}" with departmentIds:`, parsedDepartmentIds)
     try {
       if (parsedDepartmentIds.length === 0) {
         // Notify all users with departments + admins (visible to all departments)
@@ -322,8 +323,10 @@ export async function POST(request: NextRequest) {
           console.warn(`No users found to notify for document "${title}" in departments ${parsedDepartmentIds.join(', ')}`)
         }
       }
+
+      console.log(`✅ Notification creation completed for document "${title}"`)
     } catch (notificationError) {
-      console.error('Failed to create notifications for document creation:', notificationError)
+      console.error('❌ Failed to create notifications for document creation:', notificationError)
       // Don't fail the document creation if notifications fail
     }
 

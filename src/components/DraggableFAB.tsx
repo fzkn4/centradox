@@ -5,6 +5,7 @@ import { BellIcon, TrashIcon, DocumentTextIcon, CheckCircleIcon, ExclamationTria
 import { useAuthStore, useNotificationStore } from '@/lib/store'
 import { usePathname } from 'next/navigation'
 import { useRouter } from 'next/navigation'
+import { ViewDocumentModal } from '@/components/modals/ViewDocumentModal'
 
 export function DraggableFAB() {
   const pathname = usePathname()
@@ -13,6 +14,8 @@ export function DraggableFAB() {
   const { notifications, unreadCount, setNotifications, markAsRead, markAllAsRead, deleteNotification, setLoading, setError } = useNotificationStore()
   const [isOpen, setIsOpen] = useState(false)
   const [previousUnreadCount, setPreviousUnreadCount] = useState(0)
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null)
+  const [viewModalOpen, setViewModalOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const getNotificationIcon = (type: string) => {
@@ -82,15 +85,38 @@ export function DraggableFAB() {
         })
         if (response.ok) {
           const data = await response.json()
-          const newNotifications = data.notifications
-          setNotifications(newNotifications)
+          const serverNotifications = data.notifications
 
-          // Play sound if new unread notifications
-          const newUnreadCount = newNotifications.filter((n: any) => !n.read).length
-          if (newUnreadCount > previousUnreadCount) {
-            playNotificationSound()
+          // Smart state merging: preserve local read states
+          const mergedNotifications = serverNotifications.map((serverNotif: any) => {
+            const localNotif = notifications.find(n => n.id === serverNotif.id)
+            // Preserve local read state if it exists, otherwise use server state
+            return localNotif
+              ? { ...serverNotif, read: localNotif.read }
+              : serverNotif
+          })
+
+          // Only update if there are actual changes to prevent unnecessary re-renders
+          const hasChanges = mergedNotifications.length !== notifications.length ||
+            mergedNotifications.some((newNotif: any, index: number) => {
+              const oldNotif = notifications[index]
+              return !oldNotif ||
+                newNotif.id !== oldNotif.id ||
+                newNotif.message !== oldNotif.message ||
+                newNotif.type !== oldNotif.type ||
+                newNotif.createdAt !== oldNotif.createdAt
+            })
+
+          if (hasChanges) {
+            setNotifications(mergedNotifications)
+
+            // Play sound only for truly new notifications (not re-fetched ones)
+            const newUnreadCount = mergedNotifications.filter((n: any) => !n.read).length
+            if (newUnreadCount > previousUnreadCount) {
+              playNotificationSound()
+            }
+            setPreviousUnreadCount(newUnreadCount)
           }
-          setPreviousUnreadCount(newUnreadCount)
         }
       } catch (error) {
         console.error('Failed to fetch notifications:', error)
@@ -104,7 +130,7 @@ export function DraggableFAB() {
     const interval = setInterval(fetchNotifications, 30000)
 
     return () => clearInterval(interval)
-  }, [setNotifications, previousUnreadCount, token])
+  }, [setNotifications, previousUnreadCount, token, notifications])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -211,16 +237,20 @@ export function DraggableFAB() {
                         </div>
 
                         {/* Content */}
-                        <div className="flex-1 min-w-0">
+                          <div className="flex-1 min-w-0">
                           <div
                             className="cursor-pointer group/content"
                             onClick={async () => {
                               if (!notification.read) {
-                                await fetch(`/api/notifications/${notification.id}/read`, { method: 'POST' })
+                                await fetch(`/api/notifications/${notification.id}/read`, {
+                                  method: 'POST',
+                                  headers: { Authorization: `Bearer ${token}` }
+                                })
                                 markAsRead(notification.id)
                               }
                               if (notification.documentId) {
-                                router.push(`/documents/${notification.documentId}`)
+                                setSelectedDocumentId(notification.documentId)
+                                setViewModalOpen(true)
                               }
                               setIsOpen(false)
                             }}
@@ -293,6 +323,15 @@ export function DraggableFAB() {
           )}
         </div>
       )}
+
+      <ViewDocumentModal
+        isOpen={viewModalOpen}
+        onClose={() => {
+          setViewModalOpen(false)
+          setSelectedDocumentId(null)
+        }}
+        documentId={selectedDocumentId}
+      />
     </>
   )
 }
