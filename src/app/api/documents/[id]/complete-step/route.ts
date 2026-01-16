@@ -80,7 +80,11 @@ export async function POST(
             steps: {
               include: {
                 assignedTo: true,
-                department: true
+                departments: {
+          include: {
+            department: true
+          }
+        }
               }
             }
           }
@@ -186,6 +190,71 @@ export async function POST(
       }
     })
 
+    // Create notifications for department users and admins
+    try {
+      if (document.departments.length > 0) {
+        const departmentUsers = await prisma.user.findMany({
+          where: {
+            departments: {
+              some: {
+                  id: { in: document.departments.map((d: any) => d.departmentId) }
+              }
+            }
+          },
+          select: { id: true }
+        })
+
+        const admins = await prisma.user.findMany({
+          where: { role: 'ADMIN' },
+          select: { id: true }
+        })
+
+        const notifiedUserIds = [...new Set([...departmentUsers.map((u: any) => u.id), ...admins.map((u: any) => u.id)])]
+
+        const departmentNames = document.departments.map((d: any) => d.department.name).join(', ')
+
+        console.log(`Creating step completion notifications for "${document.title}" in ${departmentNames}: found ${departmentUsers.length} department users, ${admins.length} admins, total ${notifiedUserIds.length} notifications`)
+
+        if (notifiedUserIds.length > 0) {
+          await prisma.notification.createMany({
+            data: notifiedUserIds.map(userId => ({
+              userId,
+              type: 'step_completed',
+              message: `Step completed for "${document.title}" in ${departmentNames || 'your department'}`,
+              documentId: document.id
+            }))
+          })
+          console.log(`Successfully created ${notifiedUserIds.length} step completion notifications for "${document.title}"`)
+        } else {
+          console.warn(`No users found to notify for step completion of "${document.title}" in departments ${document.departments.map((d: any) => d.departmentId).join(', ')}`)
+        }
+      } else {
+        const admins = await prisma.user.findMany({
+          where: { role: 'ADMIN' },
+          select: { id: true }
+        })
+
+        console.log(`Creating step completion notifications for "${document.title}" (no departments): found ${admins.length} admins`)
+
+        if (admins.length > 0) {
+          await prisma.notification.createMany({
+            data: admins.map((admin: any) => ({
+              userId: admin.id,
+              type: 'step_completed',
+              message: `Step completed for "${document.title}"`,
+              documentId: document.id
+            }))
+          })
+          console.log(`Successfully created ${admins.length} step completion notifications for "${document.title}"`)
+        } else {
+          console.warn(`No admins found to notify for step completion of "${document.title}"`)
+        }
+      }
+    } catch (notificationError) {
+      console.error('Failed to create step completion notifications:', notificationError)
+      // Don't fail the step completion if notifications fail
+    }
+
     const nextStep = workflowInstance.steps.find(
       (step: any) => step.stepOrder === workflowInstance.currentStep + 1
     )
@@ -212,6 +281,71 @@ export async function POST(
           currentStatus: 'APPROVED'
         }
       })
+
+      // Create approval notifications for department users and admins
+      try {
+        if (document.departments.length > 0) {
+          const departmentUsers = await prisma.user.findMany({
+            where: {
+              departments: {
+                some: {
+                id: { in: document.departments.map((d: any) => d.departmentId) }
+                }
+              }
+            },
+            select: { id: true }
+          })
+
+          const admins = await prisma.user.findMany({
+            where: { role: 'ADMIN' },
+            select: { id: true }
+          })
+
+          const notifiedUserIds = [...new Set([...departmentUsers.map((u: any) => u.id), ...admins.map((u: any) => u.id)])]
+
+          const departmentNames = document.departments.map((d: any) => d.department.name).join(', ')
+
+          console.log(`Creating approval notifications for "${document.title}" in ${departmentNames}: found ${departmentUsers.length} department users, ${admins.length} admins, total ${notifiedUserIds.length} notifications`)
+
+          if (notifiedUserIds.length > 0) {
+            await prisma.notification.createMany({
+              data: notifiedUserIds.map(userId => ({
+                userId,
+                type: 'document_approved',
+                message: `Document "${document.title}" has been approved in ${departmentNames || 'your department'}`,
+                documentId: document.id
+              }))
+            })
+            console.log(`Successfully created ${notifiedUserIds.length} approval notifications for "${document.title}"`)
+          } else {
+            console.warn(`No users found to notify for approval of "${document.title}" in departments ${document.departments.map((d: any) => d.departmentId).join(', ')}`)
+          }
+        } else {
+          const admins = await prisma.user.findMany({
+            where: { role: 'ADMIN' },
+            select: { id: true }
+          })
+
+          console.log(`Creating approval notifications for "${document.title}" (no departments): found ${admins.length} admins`)
+
+          if (admins.length > 0) {
+            await prisma.notification.createMany({
+              data: admins.map((admin: any) => ({
+                userId: admin.id,
+                type: 'document_approved',
+                message: `Document "${document.title}" has been approved`,
+                documentId: document.id
+              }))
+            })
+            console.log(`Successfully created ${admins.length} approval notifications for "${document.title}"`)
+          } else {
+            console.warn(`No admins found to notify for approval of "${document.title}"`)
+          }
+        }
+      } catch (notificationError) {
+        console.error('Failed to create approval notifications:', notificationError)
+        // Don't fail the document approval if notifications fail
+      }
     }
 
     const updatedDocument = await prisma.document.findUnique({
@@ -225,10 +359,14 @@ export async function POST(
             role: true
           }
         },
-        department: {
-          select: {
-            id: true,
-            name: true
+        departments: {
+          include: {
+            department: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
           }
         },
         versions: {
@@ -248,12 +386,6 @@ export async function POST(
           include: {
             steps: {
               include: {
-                department: {
-                  select: {
-                    id: true,
-                    name: true
-                  }
-                },
                 assignedTo: {
                   select: {
                     id: true,

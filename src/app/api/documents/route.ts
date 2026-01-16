@@ -64,8 +64,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (department) {
-      where.createdBy = {
-        department: department
+      where.departments = {
+        some: {
+          department: {
+            id: department
+          }
+        }
       }
     }
 
@@ -73,8 +77,31 @@ export async function GET(request: NextRequest) {
       where.createdById = user.userId
     }
 
+    // Get user's departments for visibility filtering
+    const userWithDepartments = await prisma.user.findUnique({
+      where: { id: user.userId },
+      select: {
+        departments: {
+          select: { id: true }
+        }
+      }
+    })
+
+    const userDepartmentIds = userWithDepartments?.departments.map((d: any) => d.id) || []
+
+    // Filter documents by visibility: show documents where user is in selected departments or all departments if none selected
+    const visibilityWhere = {
+      OR: [
+        { departments: { none: {} } }, // No departments selected means visible to all
+        { departments: { some: { departmentId: { in: userDepartmentIds } } } }
+      ]
+    }
+
     const documents = await prisma.document.findMany({
-      where,
+      where: {
+        ...where,
+        ...visibilityWhere
+      },
       include: {
         createdBy: {
           select: {
@@ -84,10 +111,14 @@ export async function GET(request: NextRequest) {
             role: true
           }
         },
-        department: {
-          select: {
-            id: true,
-            name: true
+        departments: {
+          include: {
+            department: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
           }
         },
         _count: {
@@ -123,7 +154,7 @@ export async function POST(request: NextRequest) {
     const title = formData.get('title') as string
     const type = formData.get('type') as string
     const file = formData.get('file') as File
-    const departmentId = formData.get('departmentId') as string | null
+    const departmentIds = formData.get('departmentIds') as string | null
     const priority = formData.get('priority') as string
     const deadline = formData.get('deadline') as string | null
     const timelineSteps = formData.get('timelineSteps') as string | null
@@ -137,13 +168,14 @@ export async function POST(request: NextRequest) {
 
     const fileData = await saveFile(file)
 
+    const parsedDepartmentIds = departmentIds ? JSON.parse(departmentIds) : []
+
     const document = await prisma.document.create({
       data: {
         title,
         type,
         currentStatus: 'DRAFT',
         createdById: user.userId,
-        departmentId: departmentId || null,
         priority: (priority as any) || 'MEDIUM',
         deadline: deadline ? new Date(deadline) : null,
         versions: {
@@ -155,7 +187,10 @@ export async function POST(request: NextRequest) {
             filePath: fileData.filePath,
             createdById: user.userId
           }
-        }
+        },
+        departments: parsedDepartmentIds.length > 0 ? {
+          create: parsedDepartmentIds.map((deptId: string) => ({ departmentId: deptId }))
+        } : undefined
       },
       include: {
         createdBy: {
@@ -166,10 +201,14 @@ export async function POST(request: NextRequest) {
             role: true
           }
         },
-        department: {
-          select: {
-            id: true,
-            name: true
+        departments: {
+          include: {
+            department: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
           }
         },
         versions: {
@@ -212,6 +251,80 @@ export async function POST(request: NextRequest) {
           }
         }
       })
+    }
+
+    // Create notifications for department users and admins
+    try {
+      if (parsedDepartmentIds.length === 0) {
+        // Notify all users with departments + admins (visible to all departments)
+        const allUsersWithDepartments = await prisma.user.findMany({
+          where: {
+            departments: {
+              some: {}
+            }
+          },
+          select: { id: true }
+        })
+
+        const admins = await prisma.user.findMany({
+          where: { role: 'ADMIN' },
+          select: { id: true }
+        })
+
+        const notifiedUserIds = [...new Set([...allUsersWithDepartments.map((u: any) => u.id), ...admins.map((u: any) => u.id)])]
+
+        console.log(`Creating notifications for document "${title}" (visible to all): found ${allUsersWithDepartments.length} users with departments, ${admins.length} admins, total ${notifiedUserIds.length} notifications`)
+
+        if (notifiedUserIds.length > 0) {
+          await prisma.notification.createMany({
+            data: notifiedUserIds.map(userId => ({
+              userId,
+              type: 'document_created',
+              message: `New document "${title}" created (visible to all departments)`,
+              documentId: document.id
+            }))
+          })
+          console.log(`Successfully created ${notifiedUserIds.length} notifications for document "${title}"`)
+        } else {
+          console.warn(`No users found to notify for document "${title}" - no departments specified but no users have departments`)
+        }
+      } else {
+        // Notify specific department users + admins
+        const departmentUsers = await prisma.user.findMany({
+          where: {
+            departments: {
+              some: { id: { in: parsedDepartmentIds } }
+            }
+          },
+          select: { id: true }
+        })
+
+        const admins = await prisma.user.findMany({
+          where: { role: 'ADMIN' },
+          select: { id: true }
+        })
+
+        const notifiedUserIds = [...new Set([...departmentUsers.map((u: any) => u.id), ...admins.map((u: any) => u.id)])]
+
+        console.log(`Creating notifications for document "${title}" in departments ${parsedDepartmentIds.join(', ')}: found ${departmentUsers.length} department users, ${admins.length} admins, total ${notifiedUserIds.length} notifications`)
+
+        if (notifiedUserIds.length > 0) {
+          await prisma.notification.createMany({
+            data: notifiedUserIds.map(userId => ({
+              userId,
+              type: 'document_created',
+              message: `New document "${title}" created in ${document.departments.length > 0 ? document.departments.map((d: any) => d.department.name).join(', ') : 'your department'}`,
+              documentId: document.id
+            }))
+          })
+          console.log(`Successfully created ${notifiedUserIds.length} notifications for document "${title}"`)
+        } else {
+          console.warn(`No users found to notify for document "${title}" in departments ${parsedDepartmentIds.join(', ')}`)
+        }
+      }
+    } catch (notificationError) {
+      console.error('Failed to create notifications for document creation:', notificationError)
+      // Don't fail the document creation if notifications fail
     }
 
     return NextResponse.json({ document }, { status: 201 })

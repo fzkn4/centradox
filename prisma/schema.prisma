@@ -45,7 +45,7 @@ model Department {
   updatedAt   DateTime @updatedAt
 
   users         User[]         @relation("UserDepartments")
-  documents     Document[]     @relation("DepartmentDocuments")
+  documents     DocumentDepartments[] @relation("DepartmentDocuments")
   workflowSteps WorkflowStep[] @relation("DepartmentWorkflowSteps")
 }
 
@@ -60,10 +60,11 @@ model User {
 
   departments             Department[]     @relation("UserDepartments")
 
-  documentsCreated         Document[]         @relation("CreatedDocuments")
-  documentVersionsCreated  DocumentVersion[]  @relation("CreatedVersions")
-  workflowStepsAssigned    WorkflowStep[]     @relation("AssignedSteps")
-  comments                 Comment[]          @relation("UserComments")
+   documentsCreated         Document[]         @relation("CreatedDocuments")
+   documentVersionsCreated  DocumentVersion[]  @relation("CreatedVersions")
+   workflowStepsAssigned    WorkflowStep[]     @relation("AssignedSteps")
+   comments                 Comment[]          @relation("UserComments")
+   notifications            Notification[]    @relation("UserNotifications")
 }
 
 model Document {
@@ -81,12 +82,12 @@ model Document {
   createdBy    User              @relation("CreatedDocuments", fields: [createdById], references: [id])
   createdById   String
 
-  department   Department?       @relation("DepartmentDocuments", fields: [departmentId], references: [id])
-  departmentId String?
+    departments       DocumentDepartments[] @relation("DocumentDepartments")
 
-  versions          DocumentVersion[]
-  workflowInstances WorkflowInstance[]
-  comments          Comment[]
+    versions          DocumentVersion[]
+    workflowInstances WorkflowInstance[]
+    comments          Comment[]
+    notifications     Notification[] @relation("NotificationDocument")
 }
 
 model DocumentVersion {
@@ -147,4 +148,28 @@ model Comment {
 
   author     User     @relation("UserComments", fields: [authorId], references: [id])
   authorId   String
+}
+
+model DocumentDepartments {
+  id            String      @id @default(uuid())
+  document      Document    @relation("DocumentDepartments", fields: [documentId], references: [id], onDelete: Cascade)
+  documentId    String
+  department    Department  @relation("DepartmentDocuments", fields: [departmentId], references: [id], onDelete: Cascade)
+  departmentId  String
+
+  @@unique([documentId, departmentId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  type      String
+  message   String
+  documentId String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+
+  document  Document? @relation("NotificationDocument", fields: [documentId], references: [id])
 }

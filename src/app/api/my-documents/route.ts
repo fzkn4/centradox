@@ -27,10 +27,12 @@ interface DocumentWithWorkflow {
     name: string
     role: string
   }
-  department: {
-    id: string
-    name: string
-  } | null
+  departments: Array<{
+    department: {
+      id: string
+      name: string
+    }
+  }>
   workflowInstances: Array<{
     id: string
     currentStep: number
@@ -115,10 +117,14 @@ export async function GET(request: NextRequest) {
             role: true
           }
         },
-        department: {
-          select: {
-            id: true,
-            name: true
+        departments: {
+          include: {
+            department: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
           }
         },
         workflowInstances: {

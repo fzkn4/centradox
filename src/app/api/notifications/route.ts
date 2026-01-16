@@ -28,97 +28,60 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userWithDepartments = await prisma.user.findUnique({
-      where: { id: user.userId },
-      include: {
-        departments: {
-          select: {
-            id: true,
-            name: true
+    // For non-admins, filter by department
+    let whereCondition: any = { userId: user.userId }
+    if (user.role !== 'ADMIN') {
+      const userWithDepartments = await prisma.user.findUnique({
+        where: { id: user.userId },
+        include: {
+          departments: {
+            select: { id: true }
           }
         }
-      }
-    })
+      })
 
-    if (!userWithDepartments) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
-    const userDepartmentIds = userWithDepartments.departments.map((d: any) => d.id)
-
-    const documents = await prisma.document.findMany({
-      where: {
-        workflowInstances: {
-          some: {
-            steps: {
-              some: {
-                departmentId: {
-                  in: userDepartmentIds
-                }
-              }
-            }
-          }
-        }
-      },
-      include: {
-        createdBy: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        workflowInstances: {
-          include: {
-            steps: {
-              include: {
-                department: {
-                  select: {
-                    id: true,
-                    name: true
+      if (userWithDepartments && userWithDepartments.departments.length > 0) {
+        const departmentIds = userWithDepartments.departments.map((d: any) => d.id)
+        whereCondition = {
+          OR: [
+            { userId: user.userId }, // User's direct notifications
+            {
+              AND: [
+                { userId: { not: user.userId } }, // Others' notifications
+                 {
+                  document: {
+                    departments: {
+                      some: {
+                        departmentId: { in: departmentIds }
+                      }
+                    }
                   }
                 }
-              },
-              orderBy: {
-                stepOrder: 'asc'
+              ]
+            }
+          ]
+        }
+      }
+    }
+
+    const notifications = await prisma.notification.findMany({
+      where: whereCondition,
+      include: {
+        document: {
+          select: {
+            departments: {
+              include: {
+                department: {
+                  select: { name: true }
+                }
               }
             }
-          },
-          orderBy: {
-            startedAt: 'desc'
           }
         }
       },
       orderBy: {
-        updatedAt: 'desc'
+        createdAt: 'desc'
       }
-    })
-
-    const notifications: Notification[] = []
-
-    documents.forEach((doc: any) => {
-      const workflowInstance = doc.workflowInstances[0]
-      if (!workflowInstance) return
-
-      const userDepartmentSteps = workflowInstance.steps.filter((step: any) =>
-        step.departmentId && userDepartmentIds.includes(step.departmentId)
-      )
-
-      userDepartmentSteps.forEach((step: any) => {
-        const hasRequiredRole = step.role === user.role || user.role === 'ADMIN'
-        const isCurrentStep = step.stepOrder === workflowInstance.currentStep
-        const isPending = step.status === 'PENDING' || step.status === 'IN_PROGRESS'
-
-        if (hasRequiredRole && isCurrentStep && isPending) {
-          notifications.push({
-            id: `doc-${doc.id}-step-${step.id}`,
-            type: 'document_approval',
-            message: `Action required for "${doc.title}" in ${step.department?.name || 'your department'}`,
-            documentId: doc.id,
-            read: false, // Assume unread for simplicity
-            createdAt: doc.updatedAt
-          })
-        }
-      })
     })
 
     return NextResponse.json({ notifications })

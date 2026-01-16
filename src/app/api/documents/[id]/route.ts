@@ -73,10 +73,14 @@ export async function GET(
             role: true
           }
         },
-        department: {
-          select: {
-            id: true,
-            name: true
+        departments: {
+          include: {
+            department: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
           }
         },
         versions: {
@@ -231,10 +235,14 @@ export async function PUT(
             role: true
           }
         },
-        department: {
-          select: {
-            id: true,
-            name: true
+        departments: {
+          include: {
+            department: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
           }
         },
         versions: {

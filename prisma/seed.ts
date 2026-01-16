@@ -44,60 +44,60 @@ async function main() {
     })
   ])
 
-  const users = await Promise.all([
-    prisma.user.upsert({
-      where: { username: 'admin' },
-      update: {},
-      create: {
-        username: 'admin',
-        name: 'Admin User',
-        password: hashedPassword,
-        role: 'ADMIN',
-        departments: {
-          connect: [{ name: 'Management' }]
-        }
-      }
-    }),
-    prisma.user.upsert({
-      where: { username: 'editor' },
-      update: {},
-      create: {
-        username: 'editor',
-        name: 'Jane Editor',
-        password: hashedPassword,
-        role: 'EDITOR',
-        departments: {
-          connect: [{ name: 'Marketing' }]
-        }
-      }
-    }),
-    prisma.user.upsert({
-      where: { username: 'approver' },
-      update: {},
-      create: {
-        username: 'approver',
-        name: 'Bob Approver',
-        password: hashedPassword,
-        role: 'APPROVER',
-        departments: {
-          connect: [{ name: 'Finance' }]
-        }
-      }
-    }),
-    prisma.user.upsert({
-      where: { username: 'approver' },
-      update: {},
-      create: {
-        username: 'approver',
-        name: 'Carol Approver',
-        password: hashedPassword,
-        role: 'APPROVER',
-        departments: {
-          connect: [{ name: 'Legal' }]
-        }
-      }
-    })
-  ])
+   const users = await Promise.all([
+     prisma.user.upsert({
+       where: { username: 'admin' },
+       update: {},
+       create: {
+         username: 'admin',
+         name: 'Admin User',
+         password: hashedPassword,
+         role: 'ADMIN',
+         departments: {
+           connect: [{ name: 'Management' }]
+         }
+       }
+     }),
+     prisma.user.upsert({
+       where: { username: 'editor' },
+       update: {},
+       create: {
+         username: 'editor',
+         name: 'Jane Editor',
+         password: hashedPassword,
+         role: 'EDITOR',
+         departments: {
+           connect: [{ name: 'Marketing' }]
+         }
+       }
+     }),
+     prisma.user.upsert({
+       where: { username: 'approver' },
+       update: {},
+       create: {
+         username: 'approver',
+         name: 'Bob Approver',
+         password: hashedPassword,
+         role: 'APPROVER',
+         departments: {
+           connect: [{ name: 'Finance' }]
+         }
+       }
+     }),
+     prisma.user.upsert({
+       where: { username: 'approver2' },
+       update: {},
+       create: {
+         username: 'approver2',
+         name: 'Carol Approver',
+         password: hashedPassword,
+         role: 'APPROVER',
+         departments: {
+           connect: [{ name: 'Legal' }]
+         }
+       }
+     })
+   ])
 
    console.log('✅ Database seeded successfully!')
    console.log('\n👤 Default Admin Account:')

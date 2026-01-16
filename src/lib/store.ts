@@ -118,6 +118,7 @@ interface NotificationState {
   addNotification: (notification: Notification) => void
   markAsRead: (id: string) => void
   markAllAsRead: () => void
+  deleteNotification: (id: string) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
 }
@@ -149,6 +150,13 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     notifications: state.notifications.map(n => ({ ...n, read: true })),
     unreadCount: 0
   })),
+  deleteNotification: (id) => set((state) => {
+    const filtered = state.notifications.filter(n => n.id !== id)
+    return {
+      notifications: filtered,
+      unreadCount: filtered.filter(n => !n.read).length
+    }
+  }),
   setLoading: (loading) => set({ isLoading: loading }),
   setError: (error) => set({ error })
 }))

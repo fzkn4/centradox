@@ -57,10 +57,12 @@ interface DocumentData {
     name: string
     role: string
   }
-  department: {
-    id: string
-    name: string
-  } | null
+  departments: {
+    department: {
+      id: string
+      name: string
+    }
+  }[]
   currentVersionId: string | null
   versions: DocumentVersion[]
   workflowInstances: WorkflowInstance[]
@@ -493,7 +495,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                         </svg>
                         <p className="text-xs text-gray-500 uppercase tracking-wide">Department</p>
                       </div>
-                      <p className="font-semibold text-gray-900">{doc.department?.name || 'All Departments'}</p>
+                       <p className="font-semibold text-gray-900">{doc.departments.length > 0 ? doc.departments.map(d => d.department.name).join(', ') : 'All Departments'}</p>
                     </div>
 
                     <div className="bg-gray-50 rounded-lg p-4">
