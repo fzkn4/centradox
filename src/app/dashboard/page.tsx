@@ -61,12 +61,31 @@ export default function DashboardPage() {
 
   const stats = useMemo(() => {
     const now = new Date()
-    const overdue = documents.filter(doc => doc.deadline && new Date(doc.deadline) < now)
+    const overdue = documents.filter(doc => {
+      if (!doc.deadline) return false
+
+      const deadline = new Date(doc.deadline)
+      const isApproved = doc.currentStatus === 'APPROVED' || doc.currentStatus === 'FINAL'
+
+      if (isApproved) {
+        // For approved documents, check if completed after deadline
+        const completedAt = doc.workflowInstances?.[0]?.completedAt
+        return completedAt && new Date(completedAt) > deadline
+      } else {
+        // For non-approved documents, check if past deadline
+        return deadline < now
+      }
+    })
+
     const upcoming = documents.filter(doc => {
       if (!doc.deadline) return false
+
       const deadline = new Date(doc.deadline)
       const daysUntil = differenceInDays(deadline, now)
-      return daysUntil >= 0 && daysUntil <= 7
+      const isApproved = doc.currentStatus === 'APPROVED' || doc.currentStatus === 'FINAL'
+
+      // Only count non-approved documents as "due this week"
+      return !isApproved && daysUntil >= 0 && daysUntil <= 7
     })
 
     return {

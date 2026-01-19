@@ -19,7 +19,7 @@ function classNames(...classes: string[]) {
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { user, logout, token, isAuthenticated } = useAuthStore()
+  const { user, logout, token, isAuthenticated, isHydrated } = useAuthStore()
   const [pendingCount, setPendingCount] = useState(0)
 
   const fetchPendingCount = async () => {
@@ -40,10 +40,10 @@ export function Sidebar() {
   }
 
   useEffect(() => {
-    if (token && isAuthenticated) {
+    if (token && isAuthenticated && isHydrated) {
       fetchPendingCount()
     }
-  }, [token, isAuthenticated])
+  }, [token, isAuthenticated, isHydrated])
 
   useEffect(() => {
     const handleStepCompleted = () => fetchPendingCount()

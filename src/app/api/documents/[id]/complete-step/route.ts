@@ -71,26 +71,32 @@ export async function POST(
       )
     }
 
-    const document = await prisma.document.findUnique({
-      where: { id },
-      include: {
-        createdBy: true,
-        workflowInstances: {
-          include: {
-            steps: {
-              include: {
-                assignedTo: true,
-                departments: {
-          include: {
-            department: true
-          }
-        }
-              }
-            }
-          }
-        }
-      }
-    })
+     const document = await prisma.document.findUnique({
+       where: { id },
+       include: {
+         createdBy: true,
+         departments: {
+           include: {
+             department: {
+               select: {
+                 id: true,
+                 name: true
+               }
+             }
+           }
+         },
+         workflowInstances: {
+           include: {
+             steps: {
+               include: {
+                 assignedTo: true,
+                 department: true
+               }
+             }
+           }
+         }
+       }
+     })
 
     if (!document) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 })
