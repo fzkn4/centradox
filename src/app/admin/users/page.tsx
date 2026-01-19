@@ -418,64 +418,7 @@ export default function UserManagementPage() {
                       <p className="text-sm text-gray-500 mt-2">No departments available. Create departments first.</p>
                     )}
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Username</label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.username}
-                      onChange={(e) => setFormData({...formData, username: e.target.value})}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-gray-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Full Name</label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.name}
-                      onChange={(e) => setFormData({...formData, name: e.target.value})}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Role</label>
-                    <select
-                      value={formData.role}
-                      onChange={(e) => setFormData({...formData, role: e.target.value as Role})}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    >
-                      {roles.map(role => (
-                        <option key={role} value={role}>{role}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Departments</label>
-                    <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-300 rounded-md p-3">
-                      {allDepartments.map(dept => (
-                        <label key={dept.id} className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={formData.departmentIds.includes(dept.id)}
-                            onChange={(e) => {
-                              const checked = e.target.checked
-                              const currentIds = formData.departmentIds
-                              const newIds = checked
-                                ? [...currentIds, dept.id]
-                                : currentIds.filter(id => id !== dept.id)
-                              setFormData({...formData, departmentIds: newIds})
-                            }}
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                          />
-                          <span className="ml-2 text-sm text-gray-900">{dept.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                    {allDepartments.length === 0 && (
-                      <p className="text-sm text-gray-500 mt-2">No departments available. Create departments first.</p>
-                    )}
-                  </div>
+
                   <div className="flex justify-end space-x-3 pt-4">
                     <button
                       type="button"
