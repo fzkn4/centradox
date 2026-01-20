@@ -96,10 +96,26 @@ import { useAuthStore } from '@/lib/store'
 ### Authentication & Authorization
 - JWT tokens in `Authorization: Bearer <token>` header
 - Permission helpers in `/src/lib/permissions.ts`:
-  - `canUserEditDocument()` - EDITOR and ADMIN can edit documents
+  - `canUserEditDocument()` - EDITOR and ADMIN can edit any documents in DRAFT status, DRAFTER can edit their own documents in DRAFT status
   - `canUserApproveDocument()` - APPROVER and ADMIN can approve documents
   - `canUserSubmitDocument()` - Document authors can submit for review
-- Roles: ADMIN, EDITOR, APPROVER
+- Roles: ADMIN, EDITOR, APPROVER, DRAFTER
+
+#### Role Permissions
+- **ADMIN**: Full access to all features
+- **EDITOR**: Can edit any document in DRAFT status, can submit documents for review, must upload file during step completion
+- **APPROVER**: Can approve documents, cannot create or edit documents (except their own)
+- **DRAFTER**: Can create documents (must upload initial file), can edit only their own documents in DRAFT status, can submit their own documents, must upload file during step completion
+
+#### Document Creation Rules
+- All authenticated users can create documents
+- If creator has DRAFTER role: Must upload initial document file, workflow timeline required
+- If creator does not have DRAFTER role: File upload optional, workflow timeline REQUIRED and must start with DRAFTER role
+
+#### Step Completion Rules
+- **DRAFTER steps**: File upload required, comment optional, creates new document version
+- **EDITOR steps**: File upload required, comment required, creates new document version
+- **APPROVER steps**: File upload optional, comment required, no new version created
 
 ### Styling
 - Tailwind CSS utility-first approach

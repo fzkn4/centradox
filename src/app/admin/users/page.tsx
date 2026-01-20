@@ -20,7 +20,7 @@ interface User {
   updatedAt: string
 }
 
-const roles = ['ADMIN', 'EDITOR', 'APPROVER'] as const
+const roles = ['ADMIN', 'EDITOR', 'APPROVER', 'DRAFTER'] as const
 type Role = typeof roles[number]
 
 export default function UserManagementPage() {
@@ -306,11 +306,12 @@ export default function UserManagementPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                           user.role === 'ADMIN' ? 'bg-red-100 text-red-800' :
-                           user.role === 'APPROVER' ? 'bg-green-100 text-green-800' :
-                           'bg-blue-100 text-blue-800'
-                         }`}>
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            user.role === 'ADMIN' ? 'bg-red-100 text-red-800' :
+                            user.role === 'APPROVER' ? 'bg-green-100 text-green-800' :
+                            user.role === 'DRAFTER' ? 'bg-purple-100 text-purple-800' :
+                            'bg-blue-100 text-blue-800'
+                          }`}>
                           {user.role}
                         </span>
                       </td>

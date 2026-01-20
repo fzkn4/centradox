@@ -94,20 +94,26 @@ export async function GET(request: NextRequest) {
 
     const userDepartmentIds = userWithDepartments.departments.map((d: any) => d.id)
 
-    const documents = await prisma.document.findMany({
-      where: {
-        workflowInstances: {
-          some: {
-            steps: {
-              some: {
-                departmentId: {
-                  in: userDepartmentIds
+    // Different query logic based on user role
+    const whereCondition = user.role === 'DRAFTER'
+      ? { createdById: user.userId }  // Documents created by DRAFTER
+      : {
+          // Documents requiring action for EDITOR/APPROVER
+          workflowInstances: {
+            some: {
+              steps: {
+                some: {
+                  departmentId: {
+                    in: userDepartmentIds
+                  }
                 }
               }
             }
           }
         }
-      },
+
+    const documents = await prisma.document.findMany({
+      where: whereCondition,
       include: {
         createdBy: {
           select: {
@@ -160,6 +166,16 @@ export async function GET(request: NextRequest) {
     })
 
     const documentsWithPermissions: DocumentWithUserInfo[] = documents.map((doc: any) => {
+      // For DRAFTER role: they can always interact with documents they created
+      if (user.role === 'DRAFTER') {
+        return {
+          ...doc,
+          canInteract: true,  // DRAFTER can interact with their created documents
+          userDepartmentStep: null  // No specific step info needed for creators
+        }
+      }
+
+      // For EDITOR/APPROVER: existing logic for documents requiring action
       const workflowInstance = doc.workflowInstances[0]
       if (!workflowInstance) {
         return {
@@ -209,12 +225,16 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    const pendingDocuments = documentsWithPermissions.filter(
-      (doc: DocumentWithUserInfo) => doc.canInteract || doc.userDepartmentStep?.stepStatus === 'PENDING'
-    )
+    // For DRAFTER: show all created documents
+    // For EDITOR/APPROVER: show only documents requiring action
+    const filteredDocuments = user.role === 'DRAFTER'
+      ? documentsWithPermissions  // All created documents for DRAFTER
+      : documentsWithPermissions.filter(
+          (doc: DocumentWithUserInfo) => doc.canInteract || doc.userDepartmentStep?.stepStatus === 'PENDING'
+        )  // Only pending action documents for EDITOR/APPROVER
 
     return NextResponse.json({
-      documents: pendingDocuments,
+      documents: filteredDocuments,
       allDocuments: documentsWithPermissions
     })
   } catch (error) {

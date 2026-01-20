@@ -13,7 +13,7 @@ interface TimelineStep {
   stepOrder: number
   departmentId: string | null
   departmentName: string
-  role: 'ADMIN' | 'EDITOR' | 'APPROVER'
+  role: 'ADMIN' | 'EDITOR' | 'APPROVER' | 'DRAFTER'
 }
 
 interface SelectedDepartment {
@@ -28,7 +28,8 @@ interface NewDocumentModalProps {
 }
 
 export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocumentModalProps) {
-  const { token } = useAuthStore()
+  const { token, user } = useAuthStore()
+  const isDrafter = user?.role === 'DRAFTER'
   const titleInputRef = useRef<HTMLInputElement>(null)
   const [formData, setFormData] = useState({
     title: '',
@@ -41,7 +42,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
   const [timelineSteps, setTimelineSteps] = useState<TimelineStep[]>([])
   const [stepToAdd, setStepToAdd] = useState({
     departmentId: '',
-    role: 'APPROVER' as const
+    role: 'DRAFTER' as const
   })
   const [file, setFile] = useState<File | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -155,15 +156,35 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!formData.title.trim() || !file) {
-      setError('Title and file are required')
+    if (!formData.title.trim()) {
+      setError('Title is required')
+      return
+    }
+
+    // File validation based on role
+    if (isDrafter && !file) {
+      setError('Initial document upload is required for DRAFTER role')
+      return
+    }
+
+    // Workflow timeline is required for all users
+    if (timelineSteps.length === 0) {
+      setError('Workflow timeline is required for all document creation')
+      return
+    }
+
+    // For non-drafters, first step must be DRAFTER
+    if (!isDrafter && timelineSteps[0].role !== 'DRAFTER') {
+      setError('Workflow timeline must start with DRAFTER role when creator is not a DRAFTER')
       return
     }
 
     const formDataToSend = new FormData()
     formDataToSend.append('title', formData.title)
     formDataToSend.append('type', formData.type)
-    formDataToSend.append('file', file)
+    if (file) {
+      formDataToSend.append('file', file)
+    }
     formDataToSend.append('departmentIds', JSON.stringify(formData.departmentIds))
     formDataToSend.append('priority', formData.priority)
     if (formData.deadline) {
@@ -197,7 +218,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
       // Reset form
       setFormData({ title: '', type: 'Proposal', departmentIds: [], priority: 'MEDIUM', deadline: '' })
       setTimelineSteps([])
-      setStepToAdd({ departmentId: '', role: 'APPROVER' })
+      setStepToAdd({ departmentId: '', role: 'DRAFTER' })
       setFile(null)
       setSelectedDepartments([])
       setIsDepartmentDropdownOpen(false)
@@ -226,7 +247,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
     }
 
     setTimelineSteps([...timelineSteps, newStep])
-    setStepToAdd({ departmentId: '', role: 'APPROVER' })
+    setStepToAdd({ departmentId: '', role: 'DRAFTER' })
     setError('')
   }
 
@@ -469,11 +490,15 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
                />
              </div>
 
-            <div className="border rounded-lg p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-medium text-gray-900">Review Timeline</h4>
-                <span className="text-xs text-gray-500">Configure approval steps in order</span>
-              </div>
+             <div className="border rounded-lg p-4">
+               <div className="flex items-center justify-between mb-3">
+                 <h4 className="text-sm font-medium text-gray-900">
+                   Review Timeline (Required)
+                 </h4>
+                 <span className="text-xs text-gray-500">
+                   Configure approval steps in order{!isDrafter ? ' - must start with DRAFTER role' : ''}
+                 </span>
+               </div>
 
               {timelineSteps.length > 0 && (
                 <div className="space-y-2 mb-4">
@@ -547,6 +572,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
                   onChange={(e) => setStepToAdd({ ...stepToAdd, role: e.target.value as any })}
                   className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-gray-900"
                 >
+                  <option value="DRAFTER">Drafter</option>
                   <option value="APPROVER">Approver</option>
                   <option value="EDITOR">Editor</option>
                   <option value="ADMIN">Admin</option>
@@ -560,16 +586,16 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
               >
                 + Add Review Step
               </button>
-              {timelineSteps.length === 0 && (
-                <p className="text-xs text-gray-500 text-center mt-2">
-                  No review steps configured. Document will be created without a workflow.
-                </p>
-              )}
+               {timelineSteps.length === 0 && (
+                 <p className="text-xs text-red-600 text-center mt-2 font-medium">
+                   Review timeline is required for document creation{!isDrafter ? ' and must start with DRAFTER role' : ''}
+                 </p>
+               )}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Upload File
+                Upload Initial Document {user?.role === 'DRAFTER' ? '(Required)' : '(Optional)'}
               </label>
               <div
                 onDragEnter={handleDrag}
@@ -641,7 +667,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
               </button>
               <button
                 type="submit"
-                disabled={loading || !file}
+                disabled={loading || (isDrafter && !file)}
                 className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (

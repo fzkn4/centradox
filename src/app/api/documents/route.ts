@@ -153,45 +153,90 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData()
     const title = formData.get('title') as string
     const type = formData.get('type') as string
-    const file = formData.get('file') as File
+    const file = formData.get('file') as File | null
     const departmentIds = formData.get('departmentIds') as string | null
     const priority = formData.get('priority') as string
     const deadline = formData.get('deadline') as string | null
     const timelineSteps = formData.get('timelineSteps') as string | null
 
-    if (!title || !type || !file) {
+    if (!title || !type) {
       return NextResponse.json(
-        { error: 'Title, type, and file are required' },
+        { error: 'Title and type are required' },
         { status: 400 }
       )
     }
 
-    const fileData = await saveFile(file)
+    // If user is DRAFTER, file upload is required
+    // If user is not DRAFTER, file upload is optional but workflow must start with DRAFTER
+    const isDrafter = user.role === 'DRAFTER'
+
+    if (isDrafter && !file) {
+      return NextResponse.json(
+        { error: 'Initial document upload is required for DRAFTER role' },
+        { status: 400 }
+      )
+    }
+
+    // Parse timeline steps and validate
+    let parsedTimelineSteps: Array<{ departmentId: string | null, role: string }> = []
+    if (timelineSteps) {
+      try {
+        parsedTimelineSteps = JSON.parse(timelineSteps)
+      } catch (error) {
+        return NextResponse.json(
+          { error: 'Invalid timeline steps format' },
+          { status: 400 }
+        )
+      }
+    }
+
+    // Workflow timeline is required for ALL users
+    if (parsedTimelineSteps.length === 0) {
+      return NextResponse.json(
+        { error: 'Workflow timeline is required for all document creation' },
+        { status: 400 }
+      )
+    }
+
+    // For non-drafters, first step must be DRAFTER
+    if (!isDrafter && parsedTimelineSteps[0].role !== 'DRAFTER') {
+      return NextResponse.json(
+        { error: 'Workflow timeline must start with DRAFTER role when creator is not a DRAFTER' },
+        { status: 400 }
+      )
+    }
 
     const parsedDepartmentIds = departmentIds ? JSON.parse(departmentIds) : []
 
+    let documentData: any = {
+      title,
+      type,
+      currentStatus: 'DRAFT',
+      createdById: user.userId,
+      priority: (priority as any) || 'MEDIUM',
+      deadline: deadline ? new Date(deadline) : null,
+      departments: parsedDepartmentIds.length > 0 ? {
+        create: parsedDepartmentIds.map((deptId: string) => ({ departmentId: deptId }))
+      } : undefined
+    }
+
+    // Only create version if file is provided
+    if (file) {
+      const fileData = await saveFile(file)
+      documentData.versions = {
+        create: {
+          versionNumber: 1,
+          fileName: fileData.fileName,
+          fileSize: fileData.fileSize,
+          mimeType: fileData.mimeType,
+          filePath: fileData.filePath,
+          createdById: user.userId
+        }
+      }
+    }
+
     const document = await prisma.document.create({
-      data: {
-        title,
-        type,
-        currentStatus: 'DRAFT',
-        createdById: user.userId,
-        priority: (priority as any) || 'MEDIUM',
-        deadline: deadline ? new Date(deadline) : null,
-        versions: {
-          create: {
-            versionNumber: 1,
-            fileName: fileData.fileName,
-            fileSize: fileData.fileSize,
-            mimeType: fileData.mimeType,
-            filePath: fileData.filePath,
-            createdById: user.userId
-          }
-        },
-        departments: parsedDepartmentIds.length > 0 ? {
-          create: parsedDepartmentIds.map((deptId: string) => ({ departmentId: deptId }))
-        } : undefined
-      },
+      data: documentData,
       include: {
         createdBy: {
           select: {
@@ -228,22 +273,23 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    await prisma.document.update({
-      where: { id: document.id },
-      data: {
-        currentVersionId: document.versions[0].id
-      }
-    })
+    // Set currentVersionId if a version was created
+    if (file && document.versions.length > 0) {
+      await prisma.document.update({
+        where: { id: document.id },
+        data: {
+          currentVersionId: document.versions[0].id
+        }
+      })
+    }
 
-    if (timelineSteps) {
-      const steps = JSON.parse(timelineSteps) as Array<{ departmentId: string | null, role: string }>
-
+    if (parsedTimelineSteps.length > 0) {
       const workflowInstance = await prisma.workflowInstance.create({
         data: {
           documentId: document.id,
           currentStep: 1,
           steps: {
-            create: steps.map((step, index) => ({
+            create: parsedTimelineSteps.map((step, index) => ({
               stepOrder: index + 1,
               departmentId: step.departmentId,
               role: step.role as any

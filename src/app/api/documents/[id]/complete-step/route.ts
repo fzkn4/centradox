@@ -64,7 +64,8 @@ export async function POST(
       )
     }
 
-    if (!comment || comment.trim() === '') {
+    // Comment is optional for DRAFTER steps (draft submission), required for others
+    if (user.role !== 'DRAFTER' && (!comment || comment.trim() === '')) {
       return NextResponse.json(
         { error: 'Comment is required' },
         { status: 400 }
@@ -146,9 +147,10 @@ export async function POST(
       )
     }
 
-    if (user.role === 'EDITOR' && (!file || file.size === 0)) {
+    if ((currentStep.role === 'DRAFTER' || currentStep.role === 'EDITOR') && (!file || file.size === 0)) {
+      const roleName = currentStep.role === 'DRAFTER' ? 'draft' : 'edited version'
       return NextResponse.json(
-        { error: 'File upload is required for editors' },
+        { error: `Document upload is required to submit ${roleName}` },
         { status: 400 }
       )
     }

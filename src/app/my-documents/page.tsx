@@ -103,7 +103,8 @@ export default function MyDocumentsPage() {
     }
   }, [isAuthenticated, isHydrated, loadDocuments])
 
-  const displayedDocuments = filter === 'pending' ? documents : allDocuments
+  const isDrafter = user?.role === 'DRAFTER'
+  const displayedDocuments = isDrafter ? allDocuments : (filter === 'pending' ? documents : allDocuments)
 
   const getPriorityColor = (priority: string) => {
     const colors: Record<string, string> = {
@@ -130,33 +131,40 @@ export default function MyDocumentsPage() {
       <div className="space-y-6">
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">My Documents</h1>
+            <h1 className="text-3xl font-bold text-gray-900">
+              {isDrafter ? 'Documents' : 'My Documents'}
+            </h1>
             <p className="mt-2 text-gray-600">
-              Documents requiring your attention
+              {isDrafter
+                ? 'Documents you have created'
+                : 'Documents requiring your attention'
+              }
             </p>
           </div>
-          <div className="flex space-x-2">
-            <button
-              onClick={() => setFilter('pending')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                filter === 'pending'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-              }`}
-            >
-              Pending ({documents.length})
-            </button>
-            <button
-              onClick={() => setFilter('all')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                filter === 'all'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-              }`}
-            >
-              All Documents ({allDocuments.length})
-            </button>
-          </div>
+          {!isDrafter && (
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setFilter('pending')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  filter === 'pending'
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                Pending ({documents.length})
+              </button>
+              <button
+                onClick={() => setFilter('all')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  filter === 'all'
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                All Documents ({allDocuments.length})
+              </button>
+            </div>
+          )}
         </div>
 
         {loading ? (
@@ -172,7 +180,9 @@ export default function MyDocumentsPage() {
             </div>
             <h3 className="text-lg font-medium text-gray-900">No documents found</h3>
             <p className="mt-2 text-gray-500">
-              {filter === 'pending'
+              {isDrafter
+                ? 'You haven\'t created any documents yet.'
+                : filter === 'pending'
                 ? 'You have no pending documents requiring your attention.'
                 : 'No documents are assigned to your departments yet.'}
             </p>
@@ -211,7 +221,7 @@ export default function MyDocumentsPage() {
                           <span>•</span>
                           <span>Updated: {format(new Date(doc.updatedAt), 'MMM dd, yyyy')}</span>
                         </div>
-                        {doc.userDepartmentStep && (
+                         {doc.userDepartmentStep && !isDrafter && (
                           <div className="mt-3">
                             <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-50 text-indigo-700">
                               <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

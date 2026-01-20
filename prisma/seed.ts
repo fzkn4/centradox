@@ -84,19 +84,32 @@ async function main() {
          }
        }
      }),
-     prisma.user.upsert({
-       where: { username: 'approver2' },
-       update: {},
-       create: {
-         username: 'approver2',
-         name: 'Carol Approver',
-         password: hashedPassword,
-         role: 'APPROVER',
-         departments: {
-           connect: [{ name: 'Legal' }]
-         }
-       }
-     })
+      prisma.user.upsert({
+        where: { username: 'approver2' },
+        update: {},
+        create: {
+          username: 'approver2',
+          name: 'Carol Approver',
+          password: hashedPassword,
+          role: 'APPROVER',
+          departments: {
+            connect: [{ name: 'Legal' }]
+          }
+        }
+      }),
+      prisma.user.upsert({
+        where: { username: 'drafter' },
+        update: {},
+        create: {
+          username: 'drafter',
+          name: 'Dave Drafter',
+          password: hashedPassword,
+          role: 'DRAFTER',
+          departments: {
+            connect: [{ name: 'Marketing' }]
+          }
+        }
+      })
    ])
 
    console.log('✅ Database seeded successfully!')

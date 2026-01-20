@@ -195,13 +195,16 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
   const handleCompleteStep = async () => {
     setSubmitError('')
 
-    if (!completeComment.trim()) {
+    // Comment is optional for DRAFTER steps, required for EDITOR/APPROVER steps
+    const isCommentRequired = currentWorkflowStep?.role === 'EDITOR' || currentWorkflowStep?.role === 'APPROVER'
+    if (isCommentRequired && !completeComment.trim()) {
       setSubmitError('Please add a comment')
       return
     }
 
-    if (user?.role === 'EDITOR' && !uploadFile) {
-      setSubmitError('Please upload a file')
+    if (isCurrentStepRequiringFile && !uploadFile) {
+      const roleName = currentWorkflowStep?.role === 'DRAFTER' ? 'draft' : 'edited version'
+      setSubmitError(`Document upload is required to submit ${roleName}`)
       return
     }
 
@@ -304,13 +307,16 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
     }
   }
 
-  const canCompleteStep = doc?.workflowInstances?.[0]?.steps.find(
+  const currentWorkflowStep = doc?.workflowInstances?.[0]?.steps.find(
     (step: any) => step.stepOrder === doc.workflowInstances[0].currentStep
-  )?.role === user?.role || user?.role === 'ADMIN'
+  )
 
-  const isCurrentStepEditor = doc?.workflowInstances?.[0]?.steps.find(
-    (step: any) => step.stepOrder === doc.workflowInstances[0].currentStep
-  )?.role === 'EDITOR'
+  const canCompleteStep = currentWorkflowStep?.role === user?.role || user?.role === 'ADMIN'
+
+  const isCurrentStepEditor = currentWorkflowStep?.role === 'EDITOR'
+  const isCurrentStepDrafter = currentWorkflowStep?.role === 'DRAFTER'
+  const isCurrentStepRequiringFile = isCurrentStepDrafter || isCurrentStepEditor
+  const isCommentRequired = currentWorkflowStep?.role === 'EDITOR' || currentWorkflowStep?.role === 'APPROVER'
 
   const isDocumentComplete = doc?.currentStatus === 'APPROVED' || doc?.currentStatus === 'FINAL'
 
@@ -658,15 +664,15 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                     <div>
                       <h4 className="text-sm font-semibold text-green-800">Complete this step</h4>
                       <p className="text-sm text-green-700 mt-1">
-                        {isCurrentStepEditor
-                          ? 'As an editor, you must upload a new file version and add a comment to complete this step.'
+                        {isCurrentStepRequiringFile
+                          ? `As a${currentWorkflowStep?.role === 'DRAFTER' ? ' drafter' : 'n editor'}, you must upload a ${currentWorkflowStep?.role === 'DRAFTER' ? 'document to submit your draft' : 'new file version and add a comment to complete this step'}.`
                           : 'Add a comment to complete this step and pass it to the next department.'}
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {isCurrentStepEditor && (
+                {isCurrentStepRequiringFile && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Upload New Version <span className="text-red-500">*</span>
@@ -722,9 +728,9 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
 
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Comment <span className="text-red-500">*</span>
-                    </label>
+                     <label className="block text-sm font-medium text-gray-700">
+                       Comment {isCommentRequired && <span className="text-red-500">*</span>}
+                     </label>
                     <span className={`text-xs ${completeComment.length > 500 ? 'text-amber-600' : 'text-gray-400'}`}>
                       {completeComment.length}/500
                     </span>

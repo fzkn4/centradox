@@ -3,7 +3,15 @@ export function canUserEditDocument(userRole: string, documentStatus: string, au
   if (documentStatus === 'FOR_REVIEW' || documentStatus === 'APPROVED') {
     return userRole === 'ADMIN' || authorId === userId
   }
-  return true
+  if (documentStatus === 'DRAFT') {
+    // ADMIN and EDITOR can edit any draft
+    if (userRole === 'ADMIN' || userRole === 'EDITOR') return true
+    // DRAFTER can only edit their own drafts
+    if (userRole === 'DRAFTER') return authorId === userId
+    // APPROVER cannot edit drafts
+    return false
+  }
+  return false
 }
 
 export function canUserApproveDocument(userRole: string, userId: string, assignedToId: string): boolean {
