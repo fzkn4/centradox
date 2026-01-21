@@ -59,13 +59,14 @@ model User {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  departments             Department[]     @relation("UserDepartments")
+   departments             Department[]     @relation("UserDepartments")
 
-   documentsCreated         Document[]         @relation("CreatedDocuments")
-   documentVersionsCreated  DocumentVersion[]  @relation("CreatedVersions")
-   workflowStepsAssigned    WorkflowStep[]     @relation("AssignedSteps")
-   comments                 Comment[]          @relation("UserComments")
-   notifications            Notification[]    @relation("UserNotifications")
+    documentsCreated         Document[]         @relation("CreatedDocuments")
+    documentVersionsCreated  DocumentVersion[]  @relation("CreatedVersions")
+    workflowStepsAssigned    WorkflowStep[]     @relation("AssignedSteps")
+    workflowStepsCompleted   WorkflowStep[]     @relation("CompletedSteps")
+    comments                 Comment[]          @relation("UserComments")
+    notifications            Notification[]     @relation("UserNotifications")
 }
 
 model Document {
@@ -129,12 +130,15 @@ model WorkflowStep {
   status        WorkflowStepStatus @default(PENDING)
   completedAt   DateTime?
   comment       String?
+  completedById String?
 
   workflowInstance  WorkflowInstance @relation(fields: [workflowInstanceId], references: [id], onDelete: Cascade)
   workflowInstanceId String
 
   assignedTo       User?             @relation("AssignedSteps", fields: [assignedToId], references: [id])
   assignedToId      String?
+
+  completedBy       User?             @relation("CompletedSteps", fields: [completedById], references: [id])
 
   department        Department?       @relation("DepartmentWorkflowSteps", fields: [departmentId], references: [id])
 }

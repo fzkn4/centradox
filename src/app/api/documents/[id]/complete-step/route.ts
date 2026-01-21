@@ -194,7 +194,8 @@ export async function POST(
       data: {
         status: 'COMPLETED',
         completedAt: new Date(),
-        comment: comment.trim()
+        comment: comment.trim(),
+        completedById: user.userId
       }
     })
 
@@ -398,6 +399,13 @@ export async function POST(
                   select: {
                     id: true,
                     name: true
+                  }
+                },
+                completedBy: {
+                  select: {
+                    id: true,
+                    name: true,
+                    role: true
                   }
                 }
               },

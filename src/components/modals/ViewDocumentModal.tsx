@@ -31,6 +31,11 @@ interface WorkflowStep {
     id: string
     name: string
   } | null
+  completedBy: {
+    id: string
+    name: string
+    role: string
+  } | null
   completedAt: string | null
   comment: string | null
 }
@@ -571,6 +576,9 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                               : `All ${step.role.toLowerCase()}s in ${step.department?.name || 'General'}`
                             }
                           </p>
+                          {step.completedBy && (
+                            <p>Completed by: {step.completedBy.name} ({step.completedBy.role.toLowerCase()})</p>
+                          )}
                           {step.completedAt && (
                             <p>Completed: {format(new Date(step.completedAt), 'MMM dd, yyyy HH:mm')}</p>
                           )}
