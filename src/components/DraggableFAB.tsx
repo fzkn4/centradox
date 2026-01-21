@@ -10,7 +10,7 @@ import { ViewDocumentModal } from '@/components/modals/ViewDocumentModal'
 export function DraggableFAB() {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, token } = useAuthStore()
+  const { user, token, isAuthenticated, isHydrated } = useAuthStore()
   const { notifications, unreadCount, setNotifications, markAsRead, markAllAsRead, deleteNotification, setLoading, setError } = useNotificationStore()
   const [isOpen, setIsOpen] = useState(false)
   const [previousUnreadCount, setPreviousUnreadCount] = useState(0)
@@ -220,7 +220,7 @@ export function DraggableFAB() {
                           <div
                             className="cursor-pointer group/content"
                             onClick={async () => {
-                              if (!notification.read) {
+                              if (!notification.read && isAuthenticated && isHydrated && token) {
                                 await fetch(`/api/notifications/${notification.id}/read`, {
                                   method: 'POST',
                                   headers: { Authorization: `Bearer ${token}` }

@@ -378,13 +378,15 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
                     onChange={(e) => setFormData({ ...formData, type: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
                   >
-                   <option value="Proposal">Proposal</option>
-                   <option value="Report">Report</option>
-                   <option value="Contract">Contract</option>
-                   <option value="Memo">Memo</option>
-                   <option value="Policy">Policy</option>
-                   <option value="Other">Other</option>
-                 </select>
+                   <option value="Approval/Signature">Approval/Signature</option>
+                   <option value="Appropriate Staff Action">Appropriate Staff Action</option>
+                   <option value="Comment/Recommendation">Comment/Recommendation</option>
+                   <option value="Study/Investigation">Study/Investigation</option>
+                   <option value="Reply Direct to Writer">Reply Direct to Writer</option>
+                   <option value="Rewrite/Repeat">Rewrite/Repeat</option>
+                   <option value="Notation/Information">Notation/Information</option>
+                   <option value="See Me/Call Me">See Me/Call Me</option>
+                  </select>
               </div>
             </div>
 
