@@ -268,7 +268,10 @@ export function DraggableFAB() {
                           <button
                             onClick={async (e) => {
                               e.stopPropagation()
-                              await fetch(`/api/notifications/${notification.id}/delete`, { method: 'DELETE' })
+                              await fetch(`/api/notifications/${notification.id}/delete`, {
+                                method: 'DELETE',
+                                headers: { Authorization: `Bearer ${token}` }
+                              })
                               deleteNotification(notification.id)
                             }}
                             className="text-gray-400 hover:text-red-500 p-1 rounded transition-colors"
