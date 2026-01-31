@@ -18,6 +18,7 @@ export default function DashboardPage() {
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null)
   const [activeFilters, setActiveFilters] = useState<FilterState>(initialFilterState)
   const [baseFilter, setBaseFilter] = useState('all')
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
 
   const loadDocuments = useCallback(async () => {
     setLoading(true)
@@ -129,7 +130,7 @@ export default function DashboardPage() {
   }
 
   const getDeadlineStatus = (deadline: string | null) => {
-    if (!deadline) return null
+    if (!deadline) return { label: 'No Deadline', class: 'text-gray-400 bg-gray-50' }
     const now = new Date()
     const deadlineDate = new Date(deadline)
     if (deadlineDate < now) return { label: 'Overdue', class: 'text-red-600 bg-red-50' }
@@ -140,12 +141,26 @@ export default function DashboardPage() {
   }
 
   const getWorkflowProgress = (doc: any) => {
+    // If the document is approved or final, it's 100% complete
+    if (doc.currentStatus === 'APPROVED' || doc.currentStatus === 'FINAL') {
+      return { percentage: 100 }
+    }
+
     const workflow = doc.workflowInstances?.[0]
-    if (!workflow || workflow.steps.length === 0) return null
-    const completed = workflow.steps.filter((s: any) => s.status === 'COMPLETED').length
-    const total = workflow.steps.length
-    const percentage = Math.round((completed / total) * 100)
-    return { completed, total, percentage }
+    if (!workflow) return { percentage: 0 }
+
+    // If currentStep is 999, it signifies terminal completion in the instance
+    if (workflow.currentStep === 999 || workflow.completedAt) {
+      return { percentage: 100 }
+    }
+
+    const steps = workflow.steps || []
+    if (steps.length === 0) return { percentage: 0 }
+
+    const completedSteps = steps.filter((s: any) => s.status === 'COMPLETED').length
+    const percentage = Math.round((completedSteps / steps.length) * 100)
+
+    return { percentage }
   }
 
   return (
@@ -326,6 +341,28 @@ export default function DashboardPage() {
                 </span>
               )}
             </button>
+
+            <button
+              onClick={() => setViewMode(viewMode === 'cards' ? 'table' : 'cards')}
+              className="p-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl border border-gray-200 transition-all flex items-center space-x-2 px-4 group"
+              title={viewMode === 'cards' ? 'Switch to Table View' : 'Switch to Card View'}
+            >
+              {viewMode === 'cards' ? (
+                <>
+                  <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                  </svg>
+                  <span className="text-sm font-bold">Table</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                  </svg>
+                  <span className="text-sm font-bold">Cards</span>
+                </>
+              )}
+            </button>
           </div>
 
           {isLoading ? (
@@ -341,87 +378,157 @@ export default function DashboardPage() {
               <p className="text-lg font-medium">No documents found</p>
               <p className="text-sm mt-1">Create your first document to get started!</p>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          ) : viewMode === 'cards' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in duration-500">
               {documents.map((doc) => {
                 const deadlineStatus = getDeadlineStatus(doc.deadline)
                 const workflowProgress = getWorkflowProgress(doc)
 
                 return (
-                  <div
+                  <div 
                     key={doc.id}
                     onClick={() => {
                       setSelectedDocumentId(doc.id)
                       setViewModalOpen(true)
                     }}
-                    className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-lg hover:border-indigo-300 transition-all cursor-pointer group"
+                    className="group bg-white border border-gray-100 rounded-xl p-5 hover:shadow-xl hover:border-indigo-100 transition-all cursor-pointer relative overflow-hidden"
                   >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors line-clamp-2">
-                          {doc.title}
-                        </h3>
-                        <p className="text-sm text-gray-500 mt-1">{doc.type}</p>
-                      </div>
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(doc.currentStatus)}`}>
+                    <div className="flex justify-between items-start mb-4">
+                      <span className={`px-2 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase ${
+                        doc.priority === 'TOP_SECRET' ? 'bg-red-50 text-red-600' :
+                        doc.priority === 'SECRET' ? 'bg-orange-50 text-orange-600' :
+                        doc.priority === 'CONFIDENTIAL' ? 'bg-green-50 text-green-600' : 'bg-indigo-50 text-indigo-600'
+                      }`}>
+                        {doc.priority?.replace('_', ' ')}
+                      </span>
+                      <span className={`px-2 py-1 rounded-md text-[10px] font-bold transition-colors ${getStatusColor(doc.currentStatus)}`}>
                         {getStatusLabel(doc.currentStatus)}
                       </span>
                     </div>
 
-                    <div className="flex items-center space-x-2 mb-3">
-                      <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-md border ${getPriorityColor(doc.priority)}`}>
-                        {doc.priority}
-                      </span>
-                      {deadlineStatus && (
-                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-md ${deadlineStatus.class}`}>
-                          {deadlineStatus.label}
-                        </span>
-                      )}
-                    </div>
+                    <h4 className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors line-clamp-1 mb-1">{doc.title}</h4>
+                    <p className="text-xs text-gray-500 mb-4">{doc.type} • {doc.departments?.[0]?.department?.name || 'General'}</p>
 
-                    {workflowProgress && (
-                      <div className="mb-3">
-                        <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
-                          <span>Workflow Progress</span>
-                          <span className="font-medium">{workflowProgress.completed}/{workflowProgress.total} steps</span>
+                    <div className="space-y-4">
+                      {/* Progress Bar */}
+                      <div>
+                        <div className="flex justify-between items-center text-[10px] mb-1">
+                          <span className="text-gray-500 font-medium">Workflow Progress</span>
+                          <span className="text-indigo-600 font-bold">{workflowProgress?.percentage || 0}%</span>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-indigo-600 h-2 rounded-full transition-all"
-                            style={{ width: `${workflowProgress.percentage}%` }}
-                          ></div>
+                        <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                          <div 
+                            className="bg-indigo-600 h-full rounded-full transition-all duration-1000"
+                            style={{ width: `${workflowProgress?.percentage || 0}%` }}
+                          />
                         </div>
                       </div>
-                    )}
 
-                    <div className="flex items-center justify-between text-sm pt-3 border-t border-gray-100">
-                      <div className="flex items-center text-gray-500">
-                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                        <span className="text-xs">{doc.createdBy.name}</span>
-                      </div>
-                      <div className="flex items-center text-gray-500">
-                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        <span className="text-xs">{format(new Date(doc.updatedAt), 'MMM dd')}</span>
+                      <div className="flex items-center justify-between pt-4 border-t border-gray-50">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-[10px] font-bold text-indigo-700">
+                            {doc.createdBy?.name?.charAt(0)}
+                          </div>
+                          <span className="text-[10px] text-gray-600 font-medium">{doc.createdBy?.name}</span>
+                        </div>
+                        <div className="flex items-center text-[10px] font-bold">
+                          <svg className={`w-3 h-3 mr-1 ${deadlineStatus.class.split(' ')[0]}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className={deadlineStatus.class.split(' ')[0]}>{deadlineStatus.label}</span>
+                        </div>
                       </div>
                     </div>
-
-                    {doc.deadline && (
-                      <div className="mt-3 pt-3 border-t border-gray-100 flex items-center text-sm">
-                        <svg className={`w-4 h-4 mr-2 ${deadlineStatus?.class?.split(' ')[0]}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span className={deadlineStatus?.class?.split(' ')[0]}>
-                          Deadline: {format(new Date(doc.deadline), 'MMM dd, yyyy HH:mm')}
-                        </span>
-                      </div>
-                    )}
                   </div>
                 )
               })}
+            </div>
+          ) : (
+            <div className="overflow-x-auto animate-in fade-in duration-500">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50/50">
+                    <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Document</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Type & Dept</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Priority</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Progress</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Deadline</th>
+                    <th className="px-4 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-wider">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {documents.map((doc) => {
+                    const deadlineStatus = getDeadlineStatus(doc.deadline)
+                    const workflowProgress = getWorkflowProgress(doc)
+                    
+                    return (
+                      <tr 
+                        key={doc.id}
+                        className="hover:bg-indigo-50/30 transition-colors group cursor-pointer border-b border-gray-50 last:border-0"
+                        onClick={() => {
+                          setSelectedDocumentId(doc.id)
+                          setViewModalOpen(true)
+                        }}
+                      >
+                        <td className="px-4 py-4">
+                          <div className="flex items-center">
+                            <div>
+                              <div className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors text-sm">{doc.title}</div>
+                              <div className="text-[10px] text-gray-500">Created {format(new Date(doc.createdAt), 'MMM dd, yyyy')}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="text-xs font-semibold text-gray-700">{doc.type}</div>
+                          <div className="text-[10px] text-gray-500">{doc.departments?.[0]?.department?.name || 'General'}</div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            doc.priority === 'TOP_SECRET' ? 'bg-red-50 text-red-600' :
+                            doc.priority === 'SECRET' ? 'bg-orange-50 text-orange-600' :
+                            doc.priority === 'CONFIDENTIAL' ? 'bg-green-50 text-green-600' : 'bg-indigo-50 text-indigo-600'
+                          }`}>
+                            {doc.priority?.replace('_', ' ')}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getStatusColor(doc.currentStatus)}`}>
+                            {getStatusLabel(doc.currentStatus)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 w-32">
+                          <div className="flex items-center space-x-2">
+                            <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                              <div 
+                                className="bg-indigo-600 h-full rounded-full"
+                                style={{ width: `${workflowProgress?.percentage || 0}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] font-bold text-indigo-600">{workflowProgress?.percentage || 0}%</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className={`flex items-center text-[10px] font-bold ${deadlineStatus.class.split(' ')[0]}`}>
+                            <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            {deadlineStatus.label}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          <button className="p-2 hover:bg-white rounded-lg transition-colors text-gray-400 hover:text-indigo-600 border border-transparent hover:border-indigo-100">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

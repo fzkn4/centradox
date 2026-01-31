@@ -193,6 +193,15 @@ export async function GET(request: NextRequest) {
             versions: true,
             comments: true
           }
+        },
+        workflowInstances: {
+          include: {
+            steps: true
+          },
+          orderBy: {
+            startedAt: 'desc'
+          },
+          take: 1
         }
       },
       orderBy: {

@@ -58,10 +58,24 @@ interface Document {
   updatedAt: string
   createdById: string
   createdBy: User
-  department?: { id: string; name: string }
+  departments?: { 
+    department: { 
+      id: string; 
+      name: string 
+    } 
+  }[]
   versions?: any[]
   comments?: any[]
-  workflowInstances?: any[]
+  workflowInstances?: {
+    id: string
+    currentStep: number
+    completedAt: string | null
+    steps: {
+      id: string
+      status: string
+      stepOrder: number
+    }[]
+  }[]
 }
 
 interface DocumentState {
