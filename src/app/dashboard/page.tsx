@@ -20,6 +20,57 @@ export default function DashboardPage() {
   const [baseFilter, setBaseFilter] = useState('all')
   const { viewMode, setViewMode } = useUiStore()
 
+  const getWorkflowProgress = (doc: any) => {
+    // If the document is approved or final, it's 100% complete
+    if (doc.currentStatus === 'APPROVED' || doc.currentStatus === 'FINAL') {
+      return { percentage: 100 }
+    }
+
+    const workflow = doc.workflowInstances?.[0]
+    if (!workflow) return { percentage: 0 }
+
+    // If currentStep is 999, it signifies terminal completion in the instance
+    if (workflow.currentStep === 999 || workflow.completedAt) {
+      return { percentage: 100 }
+    }
+
+    const steps = workflow.steps || []
+    if (steps.length === 0) return { percentage: 0 }
+
+    const completedSteps = steps.filter((s: any) => s.status === 'COMPLETED').length
+    const percentage = Math.round((completedSteps / steps.length) * 100)
+
+    return { percentage }
+  }
+
+  const getDeadlineStatus = (deadline: string | null, doc: any) => {
+    if (!deadline) return { label: 'No Deadline', class: 'text-gray-400 bg-gray-50' }
+    
+    const isCompleted = doc.currentStatus === 'APPROVED' || doc.currentStatus === 'FINAL'
+    const progress = getWorkflowProgress(doc)
+    const isDone = isCompleted || (progress?.percentage === 100)
+
+    if (isDone) return { label: 'Completed', class: 'text-indigo-600 bg-indigo-50' }
+
+    const now = new Date()
+    const deadlineDate = new Date(deadline)
+    if (deadlineDate < now) return { label: 'Overdue', class: 'text-red-600 bg-red-50' }
+    const daysUntil = differenceInDays(deadlineDate, now)
+    if (daysUntil <= 3) return { label: 'Due Soon', class: 'text-orange-600 bg-orange-50' }
+    if (daysUntil <= 7) return { label: 'Upcoming', class: 'text-yellow-600 bg-yellow-50' }
+    return { label: 'On Track', class: 'text-green-600 bg-green-50' }
+  }
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'TOP_SECRET': return 'bg-red-100 text-red-800 border-red-200'
+      case 'SECRET': return 'bg-orange-100 text-orange-800 border-orange-200'
+      case 'CONFIDENTIAL': return 'bg-green-100 text-green-800 border-green-200'
+      case 'RESTRICTED': return 'bg-blue-100 text-blue-800 border-blue-200'
+      default: return 'bg-gray-100 text-gray-800 border-gray-200'
+    }
+  }
+
   const loadDocuments = useCallback(async () => {
     setLoading(true)
     try {
@@ -85,15 +136,12 @@ export default function DashboardPage() {
 
       const deadline = new Date(doc.deadline)
       const isApproved = doc.currentStatus === 'APPROVED' || doc.currentStatus === 'FINAL'
+      const progress = getWorkflowProgress(doc)
+      const isDone = isApproved || (progress?.percentage === 100)
 
-      if (isApproved) {
-        // For approved documents, check if completed after deadline
-        const completedAt = doc.workflowInstances?.[0]?.completedAt
-        return completedAt && new Date(completedAt) > deadline
-      } else {
-        // For non-approved documents, check if past deadline
-        return deadline < now
-      }
+      if (isDone) return false
+      
+      return deadline < now
     })
 
     const upcoming = documents.filter(doc => {
@@ -102,9 +150,11 @@ export default function DashboardPage() {
       const deadline = new Date(doc.deadline)
       const daysUntil = differenceInDays(deadline, now)
       const isApproved = doc.currentStatus === 'APPROVED' || doc.currentStatus === 'FINAL'
+      const progress = getWorkflowProgress(doc)
+      const isDone = isApproved || (progress?.percentage === 100)
 
-      // Only count non-approved documents as "due this week"
-      return !isApproved && daysUntil >= 0 && daysUntil <= 7
+      // Only count non-completed documents as "due this week"
+      return !isDone && daysUntil >= 0 && daysUntil <= 7
     })
 
     return {
@@ -119,49 +169,6 @@ export default function DashboardPage() {
     }
   }, [documents])
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'TOP_SECRET': return 'bg-red-100 text-red-800 border-red-200'
-      case 'SECRET': return 'bg-orange-100 text-orange-800 border-orange-200'
-      case 'CONFIDENTIAL': return 'bg-green-100 text-green-800 border-green-200'
-      case 'RESTRICTED': return 'bg-blue-100 text-blue-800 border-blue-200'
-      default: return 'bg-gray-100 text-gray-800 border-gray-200'
-    }
-  }
-
-  const getDeadlineStatus = (deadline: string | null) => {
-    if (!deadline) return { label: 'No Deadline', class: 'text-gray-400 bg-gray-50' }
-    const now = new Date()
-    const deadlineDate = new Date(deadline)
-    if (deadlineDate < now) return { label: 'Overdue', class: 'text-red-600 bg-red-50' }
-    const daysUntil = differenceInDays(deadlineDate, now)
-    if (daysUntil <= 3) return { label: 'Due Soon', class: 'text-orange-600 bg-orange-50' }
-    if (daysUntil <= 7) return { label: 'Upcoming', class: 'text-yellow-600 bg-yellow-50' }
-    return { label: 'On Track', class: 'text-green-600 bg-green-50' }
-  }
-
-  const getWorkflowProgress = (doc: any) => {
-    // If the document is approved or final, it's 100% complete
-    if (doc.currentStatus === 'APPROVED' || doc.currentStatus === 'FINAL') {
-      return { percentage: 100 }
-    }
-
-    const workflow = doc.workflowInstances?.[0]
-    if (!workflow) return { percentage: 0 }
-
-    // If currentStep is 999, it signifies terminal completion in the instance
-    if (workflow.currentStep === 999 || workflow.completedAt) {
-      return { percentage: 100 }
-    }
-
-    const steps = workflow.steps || []
-    if (steps.length === 0) return { percentage: 0 }
-
-    const completedSteps = steps.filter((s: any) => s.status === 'COMPLETED').length
-    const percentage = Math.round((completedSteps / steps.length) * 100)
-
-    return { percentage }
-  }
 
   return (
     <AdminLayout>
@@ -383,7 +390,7 @@ export default function DashboardPage() {
           ) : viewMode === 'cards' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in duration-500">
               {documents.map((doc) => {
-                const deadlineStatus = getDeadlineStatus(doc.deadline)
+                const deadlineStatus = getDeadlineStatus(doc.deadline, doc)
                 const workflowProgress = getWorkflowProgress(doc)
 
                 return (
@@ -461,7 +468,7 @@ export default function DashboardPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {documents.map((doc) => {
-                    const deadlineStatus = getDeadlineStatus(doc.deadline)
+                    const deadlineStatus = getDeadlineStatus(doc.deadline, doc)
                     const workflowProgress = getWorkflowProgress(doc)
                     
                     return (
