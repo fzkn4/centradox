@@ -7,14 +7,17 @@ import { format, differenceInDays, isBefore, isAfter, addDays } from 'date-fns'
 import { AdminLayout } from '@/components/layout/AdminLayout'
 import { NewDocumentModal } from '@/components/modals/NewDocumentModal'
 import { ViewDocumentModal } from '@/components/modals/ViewDocumentModal'
+import { FilterModal, initialFilterState, type FilterState } from '@/components/modals/FilterModal'
 
 export default function DashboardPage() {
   const { user, isAuthenticated, token, isHydrated } = useAuthStore()
   const { documents, setDocuments, setLoading, isLoading } = useDocumentStore()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [viewModalOpen, setViewModalOpen] = useState(false)
+  const [filterModalOpen, setFilterModalOpen] = useState(false)
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null)
-  const [filter, setFilter] = useState('all')
+  const [activeFilters, setActiveFilters] = useState<FilterState>(initialFilterState)
+  const [baseFilter, setBaseFilter] = useState('all')
 
   const loadDocuments = useCallback(async () => {
     setLoading(true)
@@ -22,11 +25,26 @@ export default function DashboardPage() {
       let url = '/api/documents'
       const params = new URLSearchParams()
 
-      if (filter === 'my') {
+      // Handle base filter (tabs)
+      if (baseFilter === 'my') {
         params.append('myDocs', 'true')
-      } else if (filter !== 'all') {
-        params.append('status', filter)
+      } else if (baseFilter !== 'all') {
+        params.append('status', baseFilter)
       }
+
+      // Handle advanced filters
+      if (activeFilters.status) params.append('status', activeFilters.status)
+      if (activeFilters.statusGroup && !activeFilters.status) params.append('statusGroup', activeFilters.statusGroup)
+      if (activeFilters.type) params.append('type', activeFilters.type)
+      if (activeFilters.priority) params.append('priority', activeFilters.priority)
+      if (activeFilters.department) params.append('department', activeFilters.department)
+      if (activeFilters.timeframe !== 'all') params.append('timeframe', activeFilters.timeframe)
+      if (activeFilters.timeframe === 'custom') {
+        if (activeFilters.startDate) params.append('startDate', activeFilters.startDate)
+        if (activeFilters.endDate) params.append('endDate', activeFilters.endDate)
+      }
+      if (activeFilters.overdue) params.append('overdue', 'true')
+      if (activeFilters.dueSoon) params.append('dueSoon', 'true')
 
       if (params.toString()) {
         url += `?${params.toString()}`
@@ -47,7 +65,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [filter, token, setLoading, setDocuments])
+  }, [baseFilter, activeFilters, token, setLoading, setDocuments])
 
   useEffect(() => {
     if (isHydrated && !isAuthenticated) {
@@ -240,56 +258,73 @@ export default function DashboardPage() {
         </div>
 
         <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="flex flex-wrap gap-2 mb-6">
+          <div className="flex flex-wrap items-center justify-between mb-6 gap-4">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setBaseFilter('all')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  baseFilter === 'all'
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                All Documents
+              </button>
+              <button
+                onClick={() => setBaseFilter('my')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  baseFilter === 'my'
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                My Documents
+              </button>
+              <button
+                onClick={() => setBaseFilter('DRAFT')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  baseFilter === 'DRAFT'
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Draft
+              </button>
+              <button
+                onClick={() => setBaseFilter('FOR_REVIEW')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  baseFilter === 'FOR_REVIEW'
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                For Review
+              </button>
+              <button
+                onClick={() => setBaseFilter('APPROVED')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  baseFilter === 'APPROVED'
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Approved
+              </button>
+            </div>
+
             <button
-              onClick={() => setFilter('all')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                filter === 'all'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+              onClick={() => setFilterModalOpen(true)}
+              className="relative p-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl border border-gray-200 transition-all flex items-center space-x-2 px-4 group"
             >
-              All Documents
-            </button>
-            <button
-              onClick={() => setFilter('my')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                filter === 'my'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              My Documents
-            </button>
-            <button
-              onClick={() => setFilter('DRAFT')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                filter === 'DRAFT'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Draft
-            </button>
-            <button
-              onClick={() => setFilter('FOR_REVIEW')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                filter === 'FOR_REVIEW'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              For Review
-            </button>
-            <button
-              onClick={() => setFilter('APPROVED')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                filter === 'APPROVED'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Approved
+              <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 8.293A1 1 0 013 7.586V4z" />
+              </svg>
+              <span className="text-sm font-bold">Filters</span>
+              {Object.values(activeFilters).filter(v => v !== '' && v !== false && v !== 'all').length > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-bold text-white ring-2 ring-white animate-in zoom-in duration-300">
+                  {Object.values(activeFilters).filter(v => v !== '' && v !== false && v !== 'all').length}
+                </span>
+              )}
             </button>
           </div>
 
@@ -405,6 +440,13 @@ export default function DashboardPage() {
           setSelectedDocumentId(null)
         }}
         documentId={selectedDocumentId}
+      />
+
+      <FilterModal
+        isOpen={filterModalOpen}
+        onClose={() => setFilterModalOpen(false)}
+        onApply={setActiveFilters}
+        currentFilters={activeFilters}
       />
     </AdminLayout>
   )

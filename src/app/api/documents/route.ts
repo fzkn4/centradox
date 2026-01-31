@@ -52,23 +52,90 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type')
     const department = searchParams.get('department')
     const myDocs = searchParams.get('myDocs') === 'true'
+    const priority = searchParams.get('priority')
+    const timeframe = searchParams.get('timeframe')
+    const startDate = searchParams.get('startDate')
+    const endDate = searchParams.get('endDate')
+    const statusGroup = searchParams.get('statusGroup')
+    const overdue = searchParams.get('overdue') === 'true'
+    const dueSoon = searchParams.get('dueSoon') === 'true'
 
     const where: any = {}
 
     if (status) {
       where.currentStatus = status
+    } else if (statusGroup) {
+      if (statusGroup === 'in_progress') {
+        where.currentStatus = { in: ['FOR_REVIEW', 'CHANGES_REQUESTED'] }
+      } else if (statusGroup === 'approved') {
+        where.currentStatus = { in: ['APPROVED', 'FINAL'] }
+      } else if (statusGroup === 'draft') {
+        where.currentStatus = 'DRAFT'
+      }
     }
 
     if (type) {
       where.type = type
     }
 
+    if (priority) {
+      where.priority = priority
+    }
+
+    if (overdue) {
+      where.deadline = { lt: new Date() }
+      where.currentStatus = { notIn: ['APPROVED', 'FINAL'] }
+    } else if (dueSoon) {
+      const now = new Date()
+      const threeDaysFromNow = new Date()
+      threeDaysFromNow.setDate(now.getDate() + 3)
+      where.deadline = {
+        gte: now,
+        lte: threeDaysFromNow
+      }
+      where.currentStatus = { notIn: ['APPROVED', 'FINAL'] }
+    }
+
+    if (timeframe || (startDate && endDate)) {
+      let start: Date | undefined
+      let end: Date | undefined
+      const now = new Date()
+
+      if (timeframe === 'daily') {
+        start = new Date(now.setHours(0, 0, 0, 0))
+        end = new Date(now.setHours(23, 59, 59, 999))
+      } else if (timeframe === 'weekly') {
+        const day = now.getDay()
+        const diff = now.getDate() - day + (day === 0 ? -6 : 1)
+        start = new Date(now.setDate(diff))
+        start.setHours(0, 0, 0, 0)
+        end = new Date(start)
+        end.setDate(start.getDate() + 6)
+        end.setHours(23, 59, 59, 999)
+      } else if (timeframe === 'monthly') {
+        start = new Date(now.getFullYear(), now.getMonth(), 1)
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+      } else if (timeframe === 'yearly') {
+        start = new Date(now.getFullYear(), 0, 1)
+        end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999)
+      } else if (startDate && endDate) {
+        start = new Date(startDate)
+        end = new Date(endDate)
+        end.setHours(23, 59, 59, 999)
+      }
+
+      if (start && end) {
+        where.createdAt = {
+          gte: start,
+          lte: end
+        }
+      }
+    }
+
     if (department) {
       where.departments = {
         some: {
-          department: {
-            id: department
-          }
+          departmentId: department
         }
       }
     }
