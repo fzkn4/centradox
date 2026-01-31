@@ -327,42 +327,44 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            <button
-              onClick={() => setFilterModalOpen(true)}
-              className="relative p-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl border border-gray-200 transition-all flex items-center space-x-2 px-4 group"
-            >
-              <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 8.293A1 1 0 013 7.586V4z" />
-              </svg>
-              <span className="text-sm font-bold">Filters</span>
-              {Object.values(activeFilters).filter(v => v !== '' && v !== false && v !== 'all').length > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-bold text-white ring-2 ring-white animate-in zoom-in duration-300">
-                  {Object.values(activeFilters).filter(v => v !== '' && v !== false && v !== 'all').length}
-                </span>
-              )}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setFilterModalOpen(true)}
+                className="relative p-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl border border-gray-200 transition-all flex items-center space-x-2 px-4 group"
+              >
+                <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 8.293A1 1 0 013 7.586V4z" />
+                </svg>
+                <span className="text-sm font-bold">Filters</span>
+                {Object.values(activeFilters).filter(v => v !== '' && v !== false && v !== 'all').length > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-bold text-white ring-2 ring-white animate-in zoom-in duration-300">
+                    {Object.values(activeFilters).filter(v => v !== '' && v !== false && v !== 'all').length}
+                  </span>
+                )}
+              </button>
 
-            <button
-              onClick={() => setViewMode(viewMode === 'cards' ? 'table' : 'cards')}
-              className="p-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl border border-gray-200 transition-all flex items-center space-x-2 px-4 group"
-              title={viewMode === 'cards' ? 'Switch to Table View' : 'Switch to Card View'}
-            >
-              {viewMode === 'cards' ? (
-                <>
-                  <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                  </svg>
-                  <span className="text-sm font-bold">Table</span>
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                  </svg>
-                  <span className="text-sm font-bold">Cards</span>
-                </>
-              )}
-            </button>
+              <button
+                onClick={() => setViewMode(viewMode === 'cards' ? 'table' : 'cards')}
+                className="p-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl border border-gray-200 transition-all flex items-center space-x-2 px-4 group"
+                title={viewMode === 'cards' ? 'Switch to Table View' : 'Switch to Card View'}
+              >
+                {viewMode === 'cards' ? (
+                  <>
+                    <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                    </svg>
+                    <span className="text-sm font-bold">Table</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                    </svg>
+                    <span className="text-sm font-bold">Cards</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
           {isLoading ? (
