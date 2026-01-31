@@ -108,20 +108,20 @@ export default function MyDocumentsPage() {
 
   const getPriorityColor = (priority: string) => {
     const colors: Record<string, string> = {
-      LOW: 'bg-gray-100 text-gray-800',
-      MEDIUM: 'bg-blue-100 text-blue-800',
-      HIGH: 'bg-orange-100 text-orange-800',
-      URGENT: 'bg-red-100 text-red-800'
+      RESTRICTED: 'bg-blue-100 text-blue-800',
+      CONFIDENTIAL: 'bg-green-100 text-green-800',
+      SECRET: 'bg-orange-100 text-orange-800',
+      TOP_SECRET: 'bg-red-100 text-red-800'
     }
     return colors[priority] || 'bg-gray-100 text-gray-800'
   }
 
   const getPriorityLabel = (priority: string) => {
     const labels: Record<string, string> = {
-      LOW: 'Low',
-      MEDIUM: 'Medium',
-      HIGH: 'High',
-      URGENT: 'Urgent'
+      RESTRICTED: 'Restricted',
+      CONFIDENTIAL: 'Confidential',
+      SECRET: 'Secret',
+      TOP_SECRET: 'Top Secret'
     }
     return labels[priority] || priority
   }

@@ -35,7 +35,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
     title: '',
     type: 'Proposal',
     departmentIds: [] as string[],
-    priority: 'MEDIUM',
+    priority: 'RESTRICTED',
     deadline: ''
   })
   const [departments, setDepartments] = useState<Department[]>([])
@@ -216,7 +216,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
       onDocumentCreated()
       onClose()
       // Reset form
-      setFormData({ title: '', type: 'Proposal', departmentIds: [], priority: 'MEDIUM', deadline: '' })
+      setFormData({ title: '', type: 'Proposal', departmentIds: [], priority: 'RESTRICTED', deadline: '' })
       setTimelineSteps([])
       setStepToAdd({ departmentId: '', role: 'DRAFTER' })
       setFile(null)
@@ -460,7 +460,6 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
                     )}
                   </div>
                 </div>
-
                <div>
                  <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-1">
                    Priority
@@ -471,25 +470,25 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
                    onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
                  >
-                   <option value="LOW">Low</option>
-                   <option value="MEDIUM">Medium</option>
-                   <option value="HIGH">High</option>
-                   <option value="URGENT">Urgent</option>
+                   <option value="RESTRICTED">Restricted</option>
+                   <option value="CONFIDENTIAL">Confidential</option>
+                   <option value="SECRET">Secret</option>
+                   <option value="TOP_SECRET">Top Secret</option>
                  </select>
                </div>
-             </div>
 
-             <div>
-               <label htmlFor="deadline" className="block text-sm font-medium text-gray-700 mb-1">
-                 Deadline <span className="text-gray-400 text-xs">(Optional - when the document must be finished)</span>
-               </label>
-               <input
-                 id="deadline"
-                 type="datetime-local"
-                 value={formData.deadline}
-                 onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
-                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
-               />
+               <div>
+                 <label htmlFor="deadline" className="block text-sm font-medium text-gray-700 mb-1">
+                   Deadline <span className="text-gray-400 text-xs">(Optional - when the document must be finished)</span>
+                 </label>
+                 <input
+                   id="deadline"
+                   type="datetime-local"
+                   value={formData.deadline}
+                   onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
+                 />
+               </div>
              </div>
 
              <div className="border rounded-lg p-4">

@@ -25,10 +25,10 @@ enum DocumentStatus {
 }
 
 enum Priority {
-  LOW
-  MEDIUM
-  HIGH
-  URGENT
+  RESTRICTED
+  CONFIDENTIAL
+  SECRET
+  TOP_SECRET
 }
 
 enum WorkflowStepStatus {
@@ -76,7 +76,7 @@ model Document {
   currentStatus     DocumentStatus    @default(DRAFT)
   currentVersionId  String?
   lockedBy          String?
-  priority          Priority          @default(MEDIUM)
+  priority          Priority          @default(RESTRICTED)
   deadline          DateTime?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt

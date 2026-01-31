@@ -95,17 +95,17 @@ export default function DashboardPage() {
       approved: documents.filter(d => d.currentStatus === 'APPROVED' || d.currentStatus === 'FINAL').length,
       overdue: overdue.length,
       upcoming: upcoming.length,
-      urgent: documents.filter(d => d.priority === 'URGENT').length,
-      high: documents.filter(d => d.priority === 'HIGH').length
+      topSecret: documents.filter(d => d.priority === 'TOP_SECRET').length,
+      secret: documents.filter(d => d.priority === 'SECRET').length
     }
   }, [documents])
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'URGENT': return 'bg-red-100 text-red-800 border-red-200'
-      case 'HIGH': return 'bg-orange-100 text-orange-800 border-orange-200'
-      case 'MEDIUM': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
-      case 'LOW': return 'bg-green-100 text-green-800 border-green-200'
+      case 'TOP_SECRET': return 'bg-red-100 text-red-800 border-red-200'
+      case 'SECRET': return 'bg-orange-100 text-orange-800 border-orange-200'
+      case 'CONFIDENTIAL': return 'bg-green-100 text-green-800 border-green-200'
+      case 'RESTRICTED': return 'bg-blue-100 text-blue-800 border-blue-200'
       default: return 'bg-gray-100 text-gray-800 border-gray-200'
     }
   }
@@ -229,8 +229,8 @@ export default function DashboardPage() {
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-yellow-600 text-sm font-medium">High Priority</p>
-                <p className="text-3xl font-bold text-yellow-700 mt-1">{stats.urgent + stats.high}</p>
+                <p className="text-yellow-600 text-sm font-medium">Critical Priority</p>
+                <p className="text-3xl font-bold text-yellow-700 mt-1">{stats.topSecret + stats.secret}</p>
               </div>
               <svg className="w-8 h-8 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />

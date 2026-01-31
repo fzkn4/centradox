@@ -213,7 +213,7 @@ export async function POST(request: NextRequest) {
       type,
       currentStatus: 'DRAFT',
       createdById: user.userId,
-      priority: (priority as any) || 'MEDIUM',
+      priority: (priority as any) || 'RESTRICTED',
       deadline: deadline ? new Date(deadline) : null,
       departments: parsedDepartmentIds.length > 0 ? {
         create: parsedDepartmentIds.map((deptId: string) => ({ departmentId: deptId }))

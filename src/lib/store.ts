@@ -6,7 +6,7 @@ interface User {
   username: string
   name: string
   role: string
-  department: string
+  departmentIds: string[]
 }
 
 interface AuthState {
