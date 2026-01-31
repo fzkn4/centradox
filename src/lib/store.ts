@@ -219,3 +219,20 @@ export const useNotificationStore = create<NotificationState>()(
   }
 }
 ))
+
+interface UiState {
+  viewMode: 'cards' | 'table'
+  setViewMode: (mode: 'cards' | 'table') => void
+}
+
+export const useUiStore = create<UiState>()(
+  persist(
+    (set) => ({
+      viewMode: 'cards',
+      setViewMode: (mode) => set({ viewMode: mode })
+    }),
+    {
+      name: 'ui-storage'
+    }
+  )
+)

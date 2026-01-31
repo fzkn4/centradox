@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { useAuthStore, useDocumentStore } from '@/lib/store'
+import { useAuthStore, useDocumentStore, useUiStore } from '@/lib/store'
 import { getStatusColor, getStatusLabel } from '@/lib/permissions'
 import { format, differenceInDays, isBefore, isAfter, addDays } from 'date-fns'
 import { AdminLayout } from '@/components/layout/AdminLayout'
@@ -18,7 +18,7 @@ export default function DashboardPage() {
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null)
   const [activeFilters, setActiveFilters] = useState<FilterState>(initialFilterState)
   const [baseFilter, setBaseFilter] = useState('all')
-  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards')
+  const { viewMode, setViewMode } = useUiStore()
 
   const loadDocuments = useCallback(async () => {
     setLoading(true)
