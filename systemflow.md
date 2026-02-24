@@ -1,6 +1,6 @@
-# Centradox System Flow Analysis
+# E-Document System Flow Analysis
 
-This document provides a comprehensive overview of the **Centradox** system flow, mapping out how users interact with the platform, how documents are managed, and how the approval workflow operates.
+This document provides a comprehensive overview of the **E-Document** system flow, mapping out how users interact with the platform, how documents are managed, and how the approval workflow operates.
 
 ## System Flow Architecture
 
@@ -89,4 +89,3 @@ graph TD
 - **Database**: SQLite (via Prisma) is used for development.
 
 ---
-*Analysis completed on February 18, 2026.*
