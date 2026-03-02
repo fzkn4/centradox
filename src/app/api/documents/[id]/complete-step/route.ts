@@ -57,15 +57,26 @@ export async function POST(
     const comment = formData.get('comment') as string
     const file = formData.get('file') as File | null
 
-    if (action !== 'complete-step') {
+    let versionId: string | null = null
+    let versionNumber: number | null = null
+
+    if (action !== 'complete-step' && action !== 'disapprove-step') {
       return NextResponse.json(
         { error: 'Invalid action' },
         { status: 400 }
       )
     }
 
-    // Comment is optional for DRAFTER steps (draft submission), required for others
-    if (user.role !== 'DRAFTER' && (!comment || comment.trim() === '')) {
+    // Comment is required for disapproval
+    if (action === 'disapprove-step' && (!comment || comment.trim() === '')) {
+      return NextResponse.json(
+        { error: 'Comment is required for disapproval' },
+        { status: 400 }
+      )
+    }
+
+    // Comment is optional for DRAFTER steps (draft submission), required for others completing steps
+    if (action === 'complete-step' && user.role !== 'DRAFTER' && (!comment || comment.trim() === '')) {
       return NextResponse.json(
         { error: 'Comment is required' },
         { status: 400 }
@@ -147,7 +158,7 @@ export async function POST(
       )
     }
 
-    if ((currentStep.role === 'DRAFTER' || currentStep.role === 'EDITOR') && (!file || file.size === 0)) {
+    if (action === 'complete-step' && (currentStep.role === 'DRAFTER' || currentStep.role === 'EDITOR') && (!file || file.size === 0)) {
       const roleName = currentStep.role === 'DRAFTER' ? 'draft' : 'edited version'
       return NextResponse.json(
         { error: `Document upload is required to submit ${roleName}` },
@@ -155,8 +166,77 @@ export async function POST(
       )
     }
 
-    let versionId: string | null = null
-    let versionNumber: number | null = null
+    if (action === 'disapprove-step') {
+      // Create a comment recording the disapproval reason
+      await prisma.comment.create({
+        data: {
+          text: `[DISAPPROVED] ${comment.trim()}`,
+          documentId: id,
+          authorId: user.userId
+        }
+      })
+
+      // Update document status and reset workflow to step 1
+      await prisma.workflowInstance.update({
+        where: { id: workflowInstance.id },
+        data: {
+          currentStep: 1
+        }
+      })
+
+      await prisma.document.update({
+        where: { id },
+        data: {
+          currentStatus: 'CHANGES_REQUESTED'
+        }
+      })
+
+      // Reset all workflow steps to pending so they can be done again
+      await prisma.workflowStep.updateMany({
+        where: { workflowInstanceId: workflowInstance.id },
+        data: {
+          status: 'PENDING',
+          completedAt: null,
+          completedById: null
+        }
+      })
+
+      // Notify users (drafters or previous step users) that changes are requested
+      try {
+        const admins = await prisma.user.findMany({
+          where: { role: 'ADMIN' },
+          select: { id: true }
+        })
+        
+        let departmentUsers: any[] = []
+        if (document.departments.length > 0) {
+          departmentUsers = await prisma.user.findMany({
+            where: {
+              departments: {
+                some: { id: { in: document.departments.map((d: any) => d.departmentId) } }
+              }
+            },
+            select: { id: true }
+          })
+        }
+
+        const notifiedUserIds = [...new Set([...departmentUsers.map((u: any) => u.id), ...admins.map((u: any) => u.id)])]
+        
+        if (notifiedUserIds.length > 0) {
+          await prisma.notification.createMany({
+            data: notifiedUserIds.map(userId => ({
+              userId,
+              type: 'changes_requested',
+              message: `Changes requested for "${document.title}"`,
+              documentId: document.id
+            }))
+          })
+        }
+      } catch (notificationError) {
+        console.error('Failed to create disapproval notifications:', notificationError)
+      }
+    } else {
+      // Original complete-step logic
 
     if (file && file.size > 0) {
       const latestVersion = await prisma.documentVersion.findFirst({
@@ -355,6 +435,7 @@ export async function POST(
         console.error('Failed to create approval notifications:', notificationError)
         // Don't fail the document approval if notifications fail
       }
+    }
     }
 
     const updatedDocument = await prisma.document.findUnique({

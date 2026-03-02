@@ -197,17 +197,17 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
     }
   }
 
-  const handleCompleteStep = async () => {
+  const handleCompleteStep = async (actionType: 'complete-step' | 'disapprove-step' = 'complete-step') => {
     setSubmitError('')
 
-    // Comment is optional for DRAFTER steps, required for EDITOR/APPROVER steps
-    const isCommentRequired = currentWorkflowStep?.role === 'EDITOR' || currentWorkflowStep?.role === 'APPROVER'
+    // Comment is optional for DRAFTER steps, required for EDITOR/APPROVER steps and for disapproval
+    const isCommentRequired = actionType === 'disapprove-step' || currentWorkflowStep?.role === 'EDITOR' || currentWorkflowStep?.role === 'APPROVER'
     if (isCommentRequired && !completeComment.trim()) {
       setSubmitError('Please add a comment')
       return
     }
 
-    if (isCurrentStepRequiringFile && !uploadFile) {
+    if (actionType === 'complete-step' && isCurrentStepRequiringFile && !uploadFile) {
       const roleName = currentWorkflowStep?.role === 'DRAFTER' ? 'draft' : 'edited version'
       setSubmitError(`Document upload is required to submit ${roleName}`)
       return
@@ -216,7 +216,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
     setSubmitting(true)
     try {
       const formData = new FormData()
-      formData.append('action', 'complete-step')
+      formData.append('action', actionType)
       formData.append('comment', completeComment)
       if (uploadFile) {
         formData.append('file', uploadFile)
@@ -325,6 +325,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
   const isCurrentStepDrafter = currentWorkflowStep?.role === 'DRAFTER'
   const isCurrentStepRequiringFile = isCurrentStepDrafter || isCurrentStepEditor
   const isCommentRequired = currentWorkflowStep?.role === 'EDITOR' || currentWorkflowStep?.role === 'APPROVER'
+  const showDisapproveOption = currentWorkflowStep?.role === 'APPROVER'
 
   const isDocumentComplete = doc?.currentStatus === 'APPROVED' || doc?.currentStatus === 'FINAL'
 
@@ -710,7 +711,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                       <p className="text-sm text-green-700 mt-1">
                         {isCurrentStepRequiringFile
                           ? `As a${currentWorkflowStep?.role === 'DRAFTER' ? ' drafter' : 'n editor'}, you must upload a ${currentWorkflowStep?.role === 'DRAFTER' ? 'document to submit your draft' : 'new file version and add a comment to complete this step'}.`
-                          : 'Add a comment to complete this step and pass it to the next department.'}
+                          : showDisapproveOption ? 'Add a comment and click Approve to pass it to the next step, or Disapprove to request changes.' : 'Add a comment to complete this step and pass it to the next department.'}
                       </p>
                     </div>
                   </div>
@@ -818,21 +819,31 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                   </div>
                 )}
 
-                <div className="flex justify-end space-x-3 pt-4 border-t">
+                <div className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3 pt-4 border-t">
                   <button
                     onClick={() => setActiveTab('details')}
-                    className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all font-medium"
+                    className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all font-medium w-full sm:w-auto text-center"
                     disabled={submitting}
                   >
                     Cancel
                   </button>
+                  {showDisapproveOption && (
+                    <button
+                      onClick={() => handleCompleteStep('disapprove-step')}
+                      disabled={submitting || !completeComment.trim()}
+                      className="px-6 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto text-center"
+                      title="Request changes and send back to Drafter"
+                    >
+                      Disapprove
+                    </button>
+                  )}
                   <button
-                    onClick={handleCompleteStep}
+                    onClick={() => handleCompleteStep('complete-step')}
                     disabled={submitting}
-                    className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={`px-6 py-2 text-white rounded-lg transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto text-center ${showDisapproveOption ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-green-600 hover:bg-green-700'}`}
                   >
                     {submitting ? (
-                      <span className="flex items-center">
+                      <span className="flex items-center justify-center">
                         <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -840,7 +851,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                         Submitting...
                       </span>
                     ) : (
-                      'Complete Step'
+                      showDisapproveOption ? 'Approve' : 'Complete Step'
                     )}
                   </button>
                 </div>
