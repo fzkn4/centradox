@@ -348,16 +348,6 @@ export default function DashboardPage() {
                 Draft
               </button>
               <button
-                onClick={() => setBaseFilter('FOR_REVIEW')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  baseFilter === 'FOR_REVIEW'
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                For Review
-              </button>
-              <button
                 onClick={() => setBaseFilter('APPROVED')}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                   baseFilter === 'APPROVED'
