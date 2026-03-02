@@ -502,6 +502,27 @@ export async function POST(
       }
     })
 
+    // EMIT SOCKET EVENT FOR REAL-TIME UPDATES via Internal Server Endpoint
+    try {
+      const eventName = action === 'disapprove-step' ? 'document_disapproved' : 'step_completed'
+      const payload = {
+        documentId: id,
+        title: document.title,
+        ...(action !== 'disapprove-step' && { isFinalStep: updatedDocument?.currentStatus === 'APPROVED' })
+      }
+      
+      await fetch(`http://localhost:${process.env.PORT || 3000}/api/internal/socket-emit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event: eventName,
+          payload
+        })
+      })
+    } catch (err) {
+      console.error('Failed to internal socket emit:', err)
+    }
+
     return NextResponse.json({
       document: updatedDocument,
       versionId,

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuthStore } from '@/lib/store'
 import { AdminLayout } from '@/components/layout/AdminLayout'
+import { sileo } from 'sileo'
 
 interface Department {
   id: string
@@ -111,12 +112,15 @@ export default function UserManagementPage() {
         setShowCreateModal(false)
         setFormData({ username: '', password: '', name: '', role: 'EDITOR', departmentIds: [] })
         fetchUsers()
+        sileo.success({ title: 'User created successfully' })
       } else {
         const data = await response.json()
         setError(data.error || 'Failed to create user')
+        sileo.error({ title: data.error || 'Failed to create user' })
       }
     } catch (error) {
       setError('Failed to create user')
+      sileo.error({ title: 'Failed to create user' })
     }
   }
 
@@ -156,6 +160,7 @@ export default function UserManagementPage() {
 
       if (response.ok) {
         setEditModalSuccess('User updated successfully!')
+        sileo.success({ title: 'User updated successfully!' })
         fetchUsers()
 
         // Auto-close modal after success
@@ -169,9 +174,11 @@ export default function UserManagementPage() {
       } else {
         const data = await response.json()
         setEditModalError(data.error || 'Failed to update user')
+        sileo.error({ title: data.error || 'Failed to update user' })
       }
     } catch (error) {
       setEditModalError('Failed to update user. Please try again.')
+      sileo.error({ title: 'Failed to update user. Please try again.' })
     } finally {
       setIsSubmitting(false)
     }
@@ -190,12 +197,15 @@ export default function UserManagementPage() {
 
       if (response.ok) {
         fetchUsers()
+        sileo.success({ title: 'User deleted successfully' })
       } else {
         const data = await response.json()
         setError(data.error || 'Failed to delete user')
+        sileo.error({ title: data.error || 'Failed to delete user' })
       }
     } catch (error) {
       setError('Failed to delete user')
+      sileo.error({ title: 'Failed to delete user' })
     }
   }
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/lib/store'
 import { getStatusColor, getStatusLabel } from '@/lib/permissions'
 import { format } from 'date-fns'
+import { sileo } from 'sileo'
 
 interface DocumentVersion {
   id: string
@@ -165,9 +166,10 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
       a.click()
       window.URL.revokeObjectURL(url)
       window.document.body.removeChild(a)
+      sileo.success({ title: 'File downloaded successfully' })
     } catch (err) {
       console.error('Failed to download:', err)
-      alert('Failed to download file')
+      sileo.error({ title: 'Failed to download file' })
     }
   }
 
@@ -192,9 +194,10 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
+      sileo.success({ title: 'File downloaded successfully' })
     } catch (err) {
       console.error('Failed to download:', err)
-      alert('Failed to download file')
+      sileo.error({ title: 'Failed to download file' })
     }
   }
 
@@ -242,8 +245,10 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
       setActiveTab('workflow')
       setCompleteComment('')
       setUploadFile(null)
+      sileo.success({ title: actionType === 'disapprove-step' ? 'Document disapproved' : 'Step completed successfully' })
     } catch (err: any) {
       setSubmitError(err.message || 'Failed to complete step')
+      sileo.error({ title: err.message || 'Failed to complete step' })
     } finally {
       setSubmitting(false)
     }
@@ -270,9 +275,11 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
 
       window.dispatchEvent(new Event('documentDeleted'))
       onClose()
+      sileo.success({ title: 'Document deleted successfully' })
     } catch (err: any) {
       setError(err.message || 'Failed to delete document')
       console.error('Failed to delete document:', err)
+      sileo.error({ title: err.message || 'Failed to delete document' })
     } finally {
       setIsDeleting(false)
     }

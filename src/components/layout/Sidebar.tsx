@@ -2,8 +2,11 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { CheckCircleIcon, XCircleIcon, InformationCircleIcon } from '@heroicons/react/24/solid'
 import { useAuthStore } from '@/lib/store'
 import { useState, useEffect } from 'react'
+import { sileo } from 'sileo'
+import { useSocket } from '@/components/providers/SocketProvider'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2 2z', roles: ['ADMIN', 'EDITOR', 'APPROVER', 'DRAFTER'] },
@@ -21,6 +24,7 @@ export function Sidebar() {
   const pathname = usePathname()
   const { user, logout, token, isAuthenticated, isHydrated } = useAuthStore()
   const [pendingCount, setPendingCount] = useState(0)
+  const { socket } = useSocket()
 
   const fetchPendingCount = async () => {
     try {
@@ -47,9 +51,88 @@ export function Sidebar() {
 
   useEffect(() => {
     const handleStepCompleted = () => fetchPendingCount()
+    
+    // Add toast notifications for the sidebar to ensure users are notified on any page they might be on, not just dashboard
+    const handleNewDoc = (data: any) => {
+      if (!data.departmentIds || data.departmentIds.length === 0 || user?.role === 'ADMIN' || user?.departmentIds?.some((id: string) => data.departmentIds.includes(id))) {
+        sileo.info({
+          title: '', 
+          icon: <span />, // hide default icon
+          description: (
+            <div className="flex items-start gap-3 min-w-[280px]">
+              <InformationCircleIcon className="w-6 h-6 shrink-0 text-blue-500" />
+              <div className="flex flex-col gap-1 mt-0.5">
+                <span className="font-semibold text-base text-blue-500">New Document Created</span>
+                <span className="text-sm text-gray-300">
+                  <span className="text-gray-100 font-medium">{data.title}</span> requires your attention.
+                </span>
+              </div>
+            </div>
+          )
+        })
+        fetchPendingCount()
+      }
+    }
+
+    const handleStepCompletedWithToast = (data: any) => {
+      sileo.info({
+        title: '', 
+        icon: <span />, // hide default icon
+        description: (
+          <div className="flex items-start gap-3 min-w-[280px]">
+            <CheckCircleIcon className="w-6 h-6 shrink-0 text-green-500" />
+            <div className="flex flex-col gap-1 mt-0.5">
+              <span className="font-semibold text-base text-green-500">
+                {data.isFinalStep ? 'Document Fully Approved' : 'Document Step Completed'}
+              </span>
+              <span className="text-sm text-gray-300">
+                {data.isFinalStep 
+                  ? `"${data.title}" has successfully completed all approval steps.` 
+                  : `An approver has signed off on "${data.title}".`}
+              </span>
+            </div>
+          </div>
+        )
+      })
+      fetchPendingCount()
+    }
+
+    const handleDisapprovedWithToast = (data: any) => {
+      sileo.info({
+        title: '', 
+        icon: <span />, // hide default icon
+        description: (
+          <div className="flex items-start gap-3 min-w-[280px]">
+            <XCircleIcon className="w-6 h-6 shrink-0 text-red-500" />
+            <div className="flex flex-col gap-1 mt-0.5">
+              <span className="font-semibold text-base text-red-500">Document Disapproved</span>
+              <span className="text-sm text-gray-300">
+                "{data.title}" has been returned for revisions.
+              </span>
+            </div>
+          </div>
+        )
+      })
+      fetchPendingCount()
+    }
+    
     window.addEventListener('documentStepCompleted', handleStepCompleted)
-    return () => window.removeEventListener('documentStepCompleted', handleStepCompleted)
-  }, [])
+
+    if (socket) {
+      socket.on('new_document', handleNewDoc)
+      socket.on('step_completed', handleStepCompletedWithToast)
+      socket.on('document_disapproved', handleDisapprovedWithToast)
+    }
+
+    return () => {
+      window.removeEventListener('documentStepCompleted', handleStepCompleted)
+      if (socket) {
+        socket.off('new_document', handleNewDoc)
+        socket.off('step_completed', handleStepCompletedWithToast)
+        socket.off('document_disapproved', handleDisapprovedWithToast)
+      }
+    }
+  }, [socket, user])
 
   return (
     <div className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0">

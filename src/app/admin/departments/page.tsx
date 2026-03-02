@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuthStore } from '@/lib/store'
 import { AdminLayout } from '@/components/layout/AdminLayout'
+import { sileo } from 'sileo'
 
 interface Department {
   id: string
@@ -112,12 +113,15 @@ export default function DepartmentManagementPage() {
         setShowCreateModal(false)
         setFormData({ name: '', description: '' })
         fetchDepartments()
+        sileo.success({ title: 'Department created successfully' })
       } else {
         const data = await response.json()
         setError(data.error || 'Failed to create department')
+        sileo.error({ title: data.error || 'Failed to create department' })
       }
     } catch (error) {
       setError('Failed to create department')
+      sileo.error({ title: 'Failed to create department' })
     }
   }
 
@@ -140,12 +144,15 @@ export default function DepartmentManagementPage() {
         setEditingDepartment(null)
         setFormData({ name: '', description: '' })
         fetchDepartments()
+        sileo.success({ title: 'Department updated successfully' })
       } else {
         const data = await response.json()
         setError(data.error || 'Failed to update department')
+        sileo.error({ title: data.error || 'Failed to update department' })
       }
     } catch (error) {
       setError('Failed to update department')
+      sileo.error({ title: 'Failed to update department' })
     }
   }
 
@@ -169,12 +176,15 @@ export default function DepartmentManagementPage() {
 
       if (response.ok) {
         fetchDepartments()
+        sileo.success({ title: 'Department deleted successfully' })
       } else {
         const data = await response.json()
         setError(data.error || 'Failed to delete department')
+        sileo.error({ title: data.error || 'Failed to delete department' })
       }
     } catch (error) {
       setError('Failed to delete department')
+      sileo.error({ title: 'Failed to delete department' })
     }
   }
 

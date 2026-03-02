@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useAuthStore } from '@/lib/store'
+import { sileo } from 'sileo'
 
 interface Department {
   id: string
@@ -158,24 +159,28 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
     e.preventDefault()
     if (!formData.title.trim()) {
       setError('Title is required')
+      sileo.error({ title: 'Title is required' })
       return
     }
 
     // File validation based on role
     if (isDrafter && !file) {
       setError('Initial document upload is required for DRAFTER role')
+      sileo.error({ title: 'Upload is required for DRAFTER role' })
       return
     }
 
     // Workflow timeline is required for all users
     if (timelineSteps.length === 0) {
       setError('Workflow timeline is required for all document creation')
+      sileo.error({ title: 'Workflow timeline is required' })
       return
     }
 
     // For non-drafters, first step must be DRAFTER
     if (!isDrafter && timelineSteps[0].role !== 'DRAFTER') {
       setError('Workflow timeline must start with DRAFTER role when creator is not a DRAFTER')
+      sileo.error({ title: 'First step must be DRAFTER' })
       return
     }
 
@@ -222,8 +227,10 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
       setFile(null)
       setSelectedDepartments([])
       setIsDepartmentDropdownOpen(false)
+      sileo.success({ title: 'Document created successfully' })
     } catch (err: any) {
       setError(err.message)
+      sileo.error({ title: err.message })
     } finally {
       setLoading(false)
     }
@@ -232,6 +239,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
   const addTimelineStep = () => {
     if (!stepToAdd.departmentId) {
       setError('Please select a department for the review step')
+      sileo.error({ title: 'Please select a department' })
       return
     }
 

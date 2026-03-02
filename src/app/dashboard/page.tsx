@@ -2,12 +2,15 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useAuthStore, useDocumentStore, useUiStore } from '@/lib/store'
+import { CheckCircleIcon, XCircleIcon, InformationCircleIcon } from '@heroicons/react/24/solid'
 import { getStatusColor, getStatusLabel } from '@/lib/permissions'
 import { format, differenceInDays, isBefore, isAfter, addDays } from 'date-fns'
 import { AdminLayout } from '@/components/layout/AdminLayout'
 import { NewDocumentModal } from '@/components/modals/NewDocumentModal'
 import { ViewDocumentModal } from '@/components/modals/ViewDocumentModal'
 import { FilterModal, initialFilterState, type FilterState } from '@/components/modals/FilterModal'
+import { useSocket } from '@/components/providers/SocketProvider'
+import { sileo } from 'sileo'
 
 export default function DashboardPage() {
   const { user, isAuthenticated, token, isHydrated } = useAuthStore()
@@ -19,6 +22,7 @@ export default function DashboardPage() {
   const [activeFilters, setActiveFilters] = useState<FilterState>(initialFilterState)
   const [baseFilter, setBaseFilter] = useState('all')
   const { viewMode, setViewMode } = useUiStore()
+  const { socket } = useSocket()
 
   const [departments, setDepartments] = useState<{id: string, name: string}[]>([])
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all')
@@ -158,11 +162,90 @@ export default function DashboardPage() {
         loadDocuments()
       }
       window.addEventListener('documentDeleted', handleDocumentDeleted)
+      
       return () => {
         window.removeEventListener('documentDeleted', handleDocumentDeleted)
       }
     }
    }, [isAuthenticated, isHydrated, loadDocuments, loadDepartments])
+
+  useEffect(() => {
+    if (socket) {
+      const handleNewDoc = (data: any) => {
+        // If the document is applicable to this user, refresh
+        if (!data.departmentIds || data.departmentIds.length === 0 || user?.role === 'ADMIN' || user?.departmentIds?.some((id: string) => data.departmentIds.includes(id))) {
+          sileo.info({
+            title: '', 
+            icon: <span />, // hide default icon
+            description: (
+              <div className="flex items-start gap-3 min-w-[280px]">
+                <InformationCircleIcon className="w-6 h-6 shrink-0 text-blue-500" />
+                <div className="flex flex-col gap-1 mt-0.5">
+                  <span className="font-semibold text-base text-blue-500">New Document Created</span>
+                  <span className="text-sm text-gray-300">
+                    <span className="text-gray-100 font-medium">{data.title}</span> requires your attention.
+                  </span>
+                </div>
+              </div>
+            )
+          })
+          loadDocuments()
+        }
+      }
+
+      const handleStepCompleted = (data: any) => {
+        sileo.info({
+          title: '', 
+          icon: <span />, // hide default icon
+          description: (
+            <div className="flex items-start gap-3 min-w-[280px]">
+              <CheckCircleIcon className="w-6 h-6 shrink-0 text-green-500" />
+              <div className="flex flex-col gap-1 mt-0.5">
+                <span className="font-semibold text-base text-green-500">
+                  {data.isFinalStep ? 'Document Fully Approved' : 'Document Step Completed'}
+                </span>
+                <span className="text-sm text-gray-300">
+                  {data.isFinalStep 
+                    ? `"${data.title}" has successfully completed all approval steps.` 
+                    : `An approver has signed off on "${data.title}".`}
+                </span>
+              </div>
+            </div>
+          )
+        })
+        loadDocuments()
+      }
+
+      const handleDisapproved = (data: any) => {
+        sileo.info({
+          title: '', 
+          icon: <span />, // hide default icon
+          description: (
+            <div className="flex items-start gap-3 min-w-[280px]">
+              <XCircleIcon className="w-6 h-6 shrink-0 text-red-500" />
+              <div className="flex flex-col gap-1 mt-0.5">
+                <span className="font-semibold text-base text-red-500">Document Disapproved</span>
+                <span className="text-sm text-gray-300">
+                  "{data.title}" has been returned for revisions.
+                </span>
+              </div>
+            </div>
+          )
+        })
+        loadDocuments()
+      }
+
+      socket.on('new_document', handleNewDoc)
+      socket.on('step_completed', handleStepCompleted)
+      socket.on('document_disapproved', handleDisapproved)
+
+      return () => {
+        socket.off('new_document', handleNewDoc)
+        socket.off('step_completed', handleStepCompleted)
+        socket.off('document_disapproved', handleDisapproved)
+      }
+    }
+  }, [socket, loadDocuments, user])
 
   const stats = useMemo(() => {
     const now = new Date()

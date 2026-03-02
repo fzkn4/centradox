@@ -447,6 +447,25 @@ export async function POST(request: NextRequest) {
       }
 
       console.log(`✅ Notification creation completed for document "${title}"`)
+
+      // EMIT SOCKET EVENT via Internal Server Endpoint
+      try {
+        await fetch(`http://localhost:${process.env.PORT || 3000}/api/internal/socket-emit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event: 'new_document',
+            payload: {
+              documentId: document.id,
+              title: document.title,
+              departmentIds: parsedDepartmentIds
+            }
+          })
+        })
+      } catch (err) {
+        console.error('Failed to internal socket emit:', err)
+      }
+
     } catch (notificationError) {
       console.error('❌ Failed to create notifications for document creation:', notificationError)
       // Don't fail the document creation if notifications fail
