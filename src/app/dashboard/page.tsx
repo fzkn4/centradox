@@ -153,6 +153,14 @@ export default function DashboardPage() {
     if (isHydrated && isAuthenticated) {
       loadDocuments()
       loadDepartments()
+      
+      const handleDocumentDeleted = () => {
+        loadDocuments()
+      }
+      window.addEventListener('documentDeleted', handleDocumentDeleted)
+      return () => {
+        window.removeEventListener('documentDeleted', handleDocumentDeleted)
+      }
     }
    }, [isAuthenticated, isHydrated, loadDocuments, loadDepartments])
 
