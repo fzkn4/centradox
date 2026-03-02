@@ -20,6 +20,30 @@ export default function DashboardPage() {
   const [baseFilter, setBaseFilter] = useState('all')
   const { viewMode, setViewMode } = useUiStore()
 
+  const [departments, setDepartments] = useState<{id: string, name: string}[]>([])
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('all')
+  const [isLoadingDepartments, setIsLoadingDepartments] = useState(false)
+
+  const loadDepartments = useCallback(async () => {
+    setIsLoadingDepartments(true)
+    try {
+      const response = await fetch('/api/departments', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        const allDepts = data.departments || []
+        // Filter departments based on the user's assigned departmentIds
+        const userDepts = user?.departmentIds ? allDepts.filter((d: any) => user.departmentIds.includes(d.id)) : allDepts
+        setDepartments(userDepts)
+      }
+    } catch (error) {
+      console.error('Failed to load departments:', error)
+    } finally {
+      setIsLoadingDepartments(false)
+    }
+  }, [token, user?.departmentIds])
+
   const getWorkflowProgress = (doc: any) => {
     // If the document is approved or final, it's 100% complete
     if (doc.currentStatus === 'APPROVED' || doc.currentStatus === 'FINAL') {
@@ -89,7 +113,9 @@ export default function DashboardPage() {
       if (activeFilters.statusGroup && !activeFilters.status) params.append('statusGroup', activeFilters.statusGroup)
       if (activeFilters.type) params.append('type', activeFilters.type)
       if (activeFilters.priority) params.append('priority', activeFilters.priority)
-      if (activeFilters.department) params.append('department', activeFilters.department)
+      
+      const deptFilter = selectedDepartment !== 'all' ? selectedDepartment : activeFilters.department
+      if (deptFilter) params.append('department', deptFilter)
       if (activeFilters.timeframe !== 'all') params.append('timeframe', activeFilters.timeframe)
       if (activeFilters.timeframe === 'custom') {
         if (activeFilters.startDate) params.append('startDate', activeFilters.startDate)
@@ -117,7 +143,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [baseFilter, activeFilters, token, setLoading, setDocuments])
+  }, [baseFilter, activeFilters, selectedDepartment, token, setLoading, setDocuments])
 
   useEffect(() => {
     if (isHydrated && !isAuthenticated) {
@@ -126,8 +152,9 @@ export default function DashboardPage() {
     }
     if (isHydrated && isAuthenticated) {
       loadDocuments()
+      loadDepartments()
     }
-   }, [isAuthenticated, isHydrated, loadDocuments])
+   }, [isAuthenticated, isHydrated, loadDocuments, loadDepartments])
 
   const stats = useMemo(() => {
     const now = new Date()
@@ -332,6 +359,17 @@ export default function DashboardPage() {
               >
                 Approved
               </button>
+              <select
+                value={selectedDepartment}
+                onChange={(e) => setSelectedDepartment(e.target.value)}
+                className="px-4 py-2 rounded-md text-sm font-medium transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200 border-0 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer disabled:opacity-50"
+                disabled={isLoadingDepartments}
+              >
+                <option value="all">All Departments</option>
+                {departments.map(dept => (
+                  <option key={dept.id} value={dept.id}>{dept.name}</option>
+                ))}
+              </select>
             </div>
 
             <div className="flex items-center gap-2">

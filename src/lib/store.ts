@@ -74,6 +74,11 @@ interface Document {
       id: string
       status: string
       stepOrder: number
+      role: string
+      assignedToId: string
+      department: { name: string } | null
+      assignedTo: { name: string }
+      comment: string | null
     }[]
   }[]
 }
