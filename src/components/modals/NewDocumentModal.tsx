@@ -613,7 +613,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
                   id="file"
                   onChange={handleFileChange}
                   className="hidden"
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.rtf"
+                  accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 />
                 <label
                   htmlFor="file"
@@ -649,7 +649,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
                         browse to choose a file
                       </p>
                       <p className="text-xs text-gray-400 mt-1">
-                        Supported formats: PDF, DOC, DOCX, XLS, XLSX, TXT, RTF
+                        Supported format: DOCX up to 10MB
                       </p>
                     </div>
                   )}

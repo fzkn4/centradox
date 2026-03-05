@@ -253,6 +253,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (file && !file.name.toLowerCase().endsWith('.docx')) {
+      return NextResponse.json(
+        { error: 'Only .docx files are allowed for security reasons.' },
+        { status: 400 }
+      )
+    }
+
     // Parse timeline steps and validate
     let parsedTimelineSteps: Array<{ departmentId: string | null, role: string }> = []
     if (timelineSteps) {

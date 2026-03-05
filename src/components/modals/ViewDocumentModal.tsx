@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useAuthStore } from '@/lib/store'
 import { getStatusColor, getStatusLabel } from '@/lib/permissions'
 import { format } from 'date-fns'
 import { sileo } from 'sileo'
+import { renderAsync } from 'docx-preview'
 
 interface DocumentVersion {
   id: string
@@ -85,7 +86,47 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
   const [doc, setDoc] = useState<DocumentData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [activeTab, setActiveTab] = useState<'details' | 'workflow' | 'versions' | 'complete'>('details')
+  const [activeTab, setActiveTab] = useState<'details' | 'workflow' | 'versions' | 'complete' | 'preview'>('details')
+
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewType, setPreviewType] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const docxContainerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const renderDocx = async () => {
+      if (
+        previewUrl &&
+        previewType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' &&
+        docxContainerRef.current
+      ) {
+        try {
+          const response = await fetch(previewUrl)
+          const arrayBuffer = await response.arrayBuffer()
+          await renderAsync(arrayBuffer, docxContainerRef.current, undefined, {
+            className: "docx",
+            inWrapper: true,
+            ignoreWidth: false,
+            ignoreHeight: false,
+            ignoreFonts: false,
+            breakPages: true,
+            ignoreLastRenderedPageBreak: false,
+            experimental: true,
+            trimXmlDeclaration: true,
+            useBase64URL: false,
+            useMathMLPolyfill: true,
+            showChanges: false,
+            debug: false
+          })
+        } catch (err) {
+          console.error('Docx render error:', err)
+          sileo.error({ title: 'Preview rendering failed' })
+        }
+      }
+    }
+
+    renderDocx()
+  }, [previewUrl, previewType, activeTab])
 
   const [completeComment, setCompleteComment] = useState('')
   const [uploadFile, setUploadFile] = useState<File | null>(null)
@@ -113,8 +154,21 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
       setCompleteComment('')
       setUploadFile(null)
       setSubmitError('')
+      if (previewUrl) {
+        window.URL.revokeObjectURL(previewUrl)
+        setPreviewUrl(null)
+        setPreviewType(null)
+      }
     }
   }, [isOpen, documentId])
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        window.URL.revokeObjectURL(previewUrl)
+      }
+    }
+  }, [previewUrl])
 
   const loadDocument = async () => {
     if (!documentId) return
@@ -170,6 +224,45 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
     } catch (err) {
       console.error('Failed to download:', err)
       sileo.error({ title: 'Failed to download file' })
+    }
+  }
+
+  const handlePreview = async (versionId?: string) => {
+    if (!documentId) return
+    const targetVersionId = versionId || doc?.currentVersionId
+    if (!targetVersionId) return
+
+    setPreviewLoading(true)
+    try {
+      const endpoint = versionId 
+        ? `/api/documents/${documentId}/download/${versionId}`
+        : `/api/documents/${documentId}/download-current`
+        
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to load preview file')
+      }
+
+      const blob = await response.blob()
+      
+      if (previewUrl) {
+        window.URL.revokeObjectURL(previewUrl)
+      }
+
+      const url = window.URL.createObjectURL(blob)
+      setPreviewUrl(url)
+      setPreviewType(blob.type)
+      setActiveTab('preview')
+    } catch (err: any) {
+      console.error('Failed to load preview:', err)
+      sileo.error({ title: 'Failed to load document preview' })
+    } finally {
+      setPreviewLoading(false)
     }
   }
 
@@ -373,7 +466,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
       className="fixed inset-0 backdrop-blur-sm overflow-y-auto h-full w-full z-50"
       onClick={onClose}
     >
-      <div className="relative top-10 mx-auto p-5 border w-11/12 max-w-5xl shadow-xl rounded-xl bg-white" onClick={(e) => e.stopPropagation()}>
+      <div className={`relative top-10 mx-auto p-5 border w-11/12 ${activeTab === 'preview' ? 'max-w-7xl' : 'max-w-5xl'} shadow-xl rounded-xl bg-white mb-20`} onClick={(e) => e.stopPropagation()}>
           <div className="flex justify-between items-start mb-6">
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Document Details</h2>
@@ -433,6 +526,29 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                 >
                   Version History ({doc.versions.length})
                 </button>
+                {(previewUrl || previewLoading) && (
+                  <button
+                    onClick={() => setActiveTab('preview')}
+                    className={`py-2 px-1 text-sm font-medium border-b-2 transition-colors flex items-center ${
+                      activeTab === 'preview'
+                        ? 'border-indigo-500 text-indigo-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    {previewLoading ? (
+                      <svg className="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    )}
+                    Preview
+                  </button>
+                )}
                 {canCompleteStep && !isDocumentComplete && (
                   <button
                     onClick={() => setActiveTab('complete')}
@@ -597,15 +713,27 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                     </button>
                   )}
                   {doc.currentVersionId && (
-                    <button
-                      onClick={handleDownloadCurrent}
-                      className="inline-flex items-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all font-medium shadow-lg hover:shadow-xl"
-                    >
-                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
-                      Download Current Version
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handlePreview()}
+                        className="inline-flex items-center px-6 py-3 bg-white text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-all font-medium shadow hover:shadow-md"
+                      >
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        Preview Document
+                      </button>
+                      <button
+                        onClick={handleDownloadCurrent}
+                        className="inline-flex items-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all font-medium shadow-lg hover:shadow-xl"
+                      >
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Download Current Version
+                      </button>
+                    </>
                   )}
                   {user?.role === 'ADMIN' && (
                     <button
@@ -688,6 +816,49 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
               </div>
             )}
 
+            {activeTab === 'preview' && previewUrl && (
+              <div className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200 h-[85vh] flex flex-col">
+                <div className="p-3 bg-white border-b border-gray-200 flex justify-between items-center">
+                  <span className="text-sm font-medium text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis">
+                    Document Preview &middot; {previewType}
+                  </span>
+                  <button 
+                    onClick={() => setActiveTab('details')}
+                    className="text-sm text-indigo-600 hover:text-indigo-800"
+                  >
+                    Close Preview
+                  </button>
+                </div>
+                <div className="flex-1 w-full flex items-center justify-center bg-gray-100 overflow-auto">
+                  {previewType?.startsWith('image/') ? (
+                    <img src={previewUrl} alt="Document Preview" className="max-w-full max-h-full object-contain shadow-sm bg-white" />
+                  ) : previewType === 'application/pdf' ? (
+                    <object data={previewUrl} type="application/pdf" className="w-full h-full shadow-sm">
+                      <iframe src={previewUrl} className="w-full h-full border-0">
+                        <p>This browser does not support PDFs. Please download the PDF to view it.</p>
+                      </iframe>
+                    </object>
+                  ) : previewType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ? (
+                    <div style={{ position: 'relative', width: '100%', height: '100%', border: '1px solid #ddd', backgroundColor: '#f3f4f6' }}>
+                      <div ref={docxContainerRef} style={{ height: '100%', overflowY: 'auto' }} className="docx-preview-container" />
+                    </div>
+                  ) : previewType === 'text/plain' ? (
+                    <iframe src={previewUrl} className="w-full h-full bg-white shadow-sm border-0 p-4" />
+                  ) : (
+                    <div className="text-center p-8 bg-white rounded-lg shadow-sm border border-gray-100">
+                      <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <h3 className="mt-2 text-sm font-medium text-gray-900">Preview not available</h3>
+                      <p className="mt-1 text-sm text-gray-500 max-w-sm mx-auto">
+                        This file format ({previewType}) cannot be directly previewed in the web browser. Please download the file to view it.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {activeTab === 'versions' && (
               <div className="bg-gray-50 rounded-lg overflow-hidden">
                 <table className="min-w-full divide-y divide-gray-200">
@@ -740,10 +911,16 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {format(new Date(version.createdAt), 'MMM dd, yyyy')}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
+                          <button
+                            onClick={() => handlePreview(version.id)}
+                            className="text-indigo-600 hover:text-indigo-900 font-medium"
+                          >
+                            Preview
+                          </button>
                           <button
                             onClick={() => handleDownloadVersion(version.id, version.fileName)}
-                            className="text-indigo-600 hover:text-indigo-900 font-medium"
+                            className="text-gray-600 hover:text-gray-900 font-medium"
                           >
                             Download
                           </button>
@@ -817,11 +994,11 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                             <div className="flex text-sm text-gray-600">
                               <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none">
                                 <span>Upload a file</span>
-                                <input id="file-upload" type="file" className="sr-only" onChange={handleFileChange} />
+                                <input id="file-upload" type="file" className="sr-only" onChange={handleFileChange} accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
                               </label>
                               <p className="pl-1">or drag and drop</p>
                             </div>
-                            <p className="text-xs text-gray-500">PDF, DOC, DOCX, XLS, XLSX up to 10MB</p>
+                            <p className="text-xs text-gray-500">DOCX up to 10MB</p>
                           </>
                         )}
                       </div>

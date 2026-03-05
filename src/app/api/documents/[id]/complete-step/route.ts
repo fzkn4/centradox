@@ -166,6 +166,13 @@ export async function POST(
       )
     }
 
+    if (file && !file.name.toLowerCase().endsWith('.docx')) {
+      return NextResponse.json(
+        { error: 'Only .docx files are allowed for security reasons.' },
+        { status: 400 }
+      )
+    }
+
     if (action === 'disapprove-step') {
       // Create a comment recording the disapproval reason
       await prisma.comment.create({
