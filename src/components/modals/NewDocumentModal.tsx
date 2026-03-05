@@ -14,7 +14,7 @@ interface TimelineStep {
   stepOrder: number
   departmentId: string | null
   departmentName: string
-  role: 'ADMIN' | 'EDITOR' | 'APPROVER' | 'DRAFTER'
+  role: 'ADMIN' | 'APPROVER' | 'DRAFTER'
 }
 
 interface SelectedDepartment {
@@ -43,7 +43,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
   const [timelineSteps, setTimelineSteps] = useState<TimelineStep[]>([])
   const [stepToAdd, setStepToAdd] = useState({
     departmentId: '',
-    role: 'DRAFTER' as const
+    role: 'APPROVER' as const
   })
   const [file, setFile] = useState<File | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -177,13 +177,6 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
       return
     }
 
-    // For non-drafters, first step must be DRAFTER
-    if (!isDrafter && timelineSteps[0].role !== 'DRAFTER') {
-      setError('Workflow timeline must start with DRAFTER role when creator is not a DRAFTER')
-      sileo.error({ title: 'First step must be DRAFTER' })
-      return
-    }
-
     const formDataToSend = new FormData()
     formDataToSend.append('title', formData.title)
     formDataToSend.append('type', formData.type)
@@ -223,7 +216,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
       // Reset form
       setFormData({ title: '', type: 'Proposal', departmentIds: [], priority: 'RESTRICTED', deadline: '' })
       setTimelineSteps([])
-      setStepToAdd({ departmentId: '', role: 'DRAFTER' })
+      setStepToAdd({ departmentId: '', role: 'APPROVER' })
       setFile(null)
       setSelectedDepartments([])
       setIsDepartmentDropdownOpen(false)
@@ -255,7 +248,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
     }
 
     setTimelineSteps([...timelineSteps, newStep])
-    setStepToAdd({ departmentId: '', role: 'DRAFTER' })
+    setStepToAdd({ departmentId: '', role: 'APPROVER' })
     setError('')
   }
 
@@ -581,9 +574,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
                   onChange={(e) => setStepToAdd({ ...stepToAdd, role: e.target.value as any })}
                   className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-gray-900"
                 >
-                  <option value="DRAFTER">Drafter</option>
                   <option value="APPROVER">Approver</option>
-                  <option value="EDITOR">Editor</option>
                   <option value="ADMIN">Admin</option>
                 </select>
               </div>
@@ -597,7 +588,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
               </button>
                {timelineSteps.length === 0 && (
                  <p className="text-xs text-red-600 text-center mt-2 font-medium">
-                   Review timeline is required for document creation{!isDrafter ? ' and must start with DRAFTER role' : ''}
+                   Review timeline is required for document creation
                  </p>
                )}
             </div>

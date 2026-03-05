@@ -158,8 +158,8 @@ export async function POST(
       )
     }
 
-    if (action === 'complete-step' && (currentStep.role === 'DRAFTER' || currentStep.role === 'EDITOR') && (!file || file.size === 0)) {
-      const roleName = currentStep.role === 'DRAFTER' ? 'draft' : 'edited version'
+    if (action === 'complete-step' && (currentStep.role === 'DRAFTER') && (!file || file.size === 0)) {
+      const roleName = 'draft'
       return NextResponse.json(
         { error: `Document upload is required to submit ${roleName}` },
         { status: 400 }
@@ -176,28 +176,77 @@ export async function POST(
         }
       })
 
-      // Update document status and reset workflow to step 1
-      await prisma.workflowInstance.update({
-        where: { id: workflowInstance.id },
+      // Find the document creator's primary department
+      const creator = await prisma.user.findUnique({
+        where: { id: document.createdById },
+        include: {
+          departments: true
+        }
+      })
+      const drafterDepartmentId = creator?.departments[0]?.id || null
+
+      // Shift subsequent steps down by 2 to make room for Drafter AND the re-review
+      await prisma.workflowStep.updateMany({
+        where: {
+          workflowInstanceId: workflowInstance.id,
+          stepOrder: {
+            gt: currentStep.stepOrder
+          }
+        },
         data: {
-          currentStep: 1
+          stepOrder: {
+            increment: 2
+          }
         }
       })
 
+      // Complete the current step indicating it was disapproved
+      await prisma.workflowStep.update({
+        where: { id: currentStep.id },
+        data: {
+          status: 'COMPLETED',
+          completedAt: new Date(),
+          completedById: user.userId,
+          comment: `[DISAPPROVED] ${comment.trim()}`
+        }
+      })
+
+      // Insert new DRAFTER step at stepOrder + 1
+      await prisma.workflowStep.create({
+        data: {
+          workflowInstanceId: workflowInstance.id,
+          stepOrder: currentStep.stepOrder + 1,
+          departmentId: drafterDepartmentId,
+          role: 'DRAFTER',
+          status: 'PENDING'
+        }
+      })
+
+      // Insert cloned APPROVER step at stepOrder + 2 for the re-review
+      await prisma.workflowStep.create({
+        data: {
+          workflowInstanceId: workflowInstance.id,
+          stepOrder: currentStep.stepOrder + 2,
+          departmentId: currentStep.departmentId,
+          assignedToId: currentStep.assignedToId,
+          role: currentStep.role,
+          status: 'PENDING'
+        }
+      })
+      
+      // Advance currentStep pointer to the Drafter
+      await prisma.workflowInstance.update({
+        where: { id: workflowInstance.id },
+        data: {
+          currentStep: currentStep.stepOrder + 1
+        }
+      })
+
+      // Update document status
       await prisma.document.update({
         where: { id },
         data: {
           currentStatus: 'CHANGES_REQUESTED'
-        }
-      })
-
-      // Reset all workflow steps to pending so they can be done again
-      await prisma.workflowStep.updateMany({
-        where: { workflowInstanceId: workflowInstance.id },
-        data: {
-          status: 'PENDING',
-          completedAt: null,
-          completedById: null
         }
       })
 
@@ -355,6 +404,16 @@ export async function POST(
           currentStep: nextStep.stepOrder
         }
       })
+
+      // If document was in CHANGES_REQUESTED or DRAFT and is moving to next step, put it in FOR_REVIEW
+      if (document.currentStatus === 'CHANGES_REQUESTED' || document.currentStatus === 'DRAFT') {
+        await prisma.document.update({
+          where: { id },
+          data: {
+            currentStatus: 'FOR_REVIEW'
+          }
+        })
+      }
     } else {
       await prisma.workflowInstance.update({
         where: { id: workflowInstance.id },

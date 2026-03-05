@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
     const whereCondition = user.role === 'DRAFTER'
       ? { createdById: user.userId }  // Documents created by DRAFTER
       : {
-          // Documents requiring action for EDITOR/APPROVER
+          // Documents requiring action for APPROVER
           workflowInstances: {
             some: {
               steps: {
@@ -175,7 +175,7 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // For EDITOR/APPROVER: existing logic for documents requiring action
+      // For APPROVER: existing logic for documents requiring action
       const workflowInstance = doc.workflowInstances[0]
       if (!workflowInstance) {
         return {
@@ -226,12 +226,12 @@ export async function GET(request: NextRequest) {
     })
 
     // For DRAFTER: show all created documents
-    // For EDITOR/APPROVER: show only documents requiring action
+    // For APPROVER: show only documents requiring action
     const filteredDocuments = user.role === 'DRAFTER'
       ? documentsWithPermissions  // All created documents for DRAFTER
       : documentsWithPermissions.filter(
           (doc: DocumentWithUserInfo) => doc.canInteract || doc.userDepartmentStep?.stepStatus === 'PENDING'
-        )  // Only pending action documents for EDITOR/APPROVER
+        )  // Only pending action documents for APPROVER
 
     return NextResponse.json({
       documents: filteredDocuments,

@@ -11,7 +11,6 @@ datasource db {
 
 enum Role {
   ADMIN
-  EDITOR
   APPROVER
   DRAFTER
 }
@@ -55,7 +54,7 @@ model User {
   username   String   @unique
   name       String
   password   String
-  role       Role     @default(EDITOR)
+  role       Role     @default(DRAFTER)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

@@ -204,15 +204,15 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
   const handleCompleteStep = async (actionType: 'complete-step' | 'disapprove-step' = 'complete-step') => {
     setSubmitError('')
 
-    // Comment is optional for DRAFTER steps, required for EDITOR/APPROVER steps and for disapproval
-    const isCommentRequired = actionType === 'disapprove-step' || currentWorkflowStep?.role === 'EDITOR' || currentWorkflowStep?.role === 'APPROVER'
+    // Comment is optional for regular DRAFTER steps, required for APPROVER steps, disapproval, or resolving CHANGES_REQUESTED
+    const isCommentRequired = actionType === 'disapprove-step' || currentWorkflowStep?.role === 'APPROVER' || (currentWorkflowStep?.role === 'DRAFTER' && doc?.currentStatus === 'CHANGES_REQUESTED')
     if (isCommentRequired && !completeComment.trim()) {
       setSubmitError('Please add a comment')
       return
     }
 
     if (actionType === 'complete-step' && isCurrentStepRequiringFile && !uploadFile) {
-      const roleName = currentWorkflowStep?.role === 'DRAFTER' ? 'draft' : 'edited version'
+      const roleName = 'draft'
       setSubmitError(`Document upload is required to submit ${roleName}`)
       return
     }
@@ -334,7 +334,8 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
     }
   }
 
-  const getStepStatusColor = (status: string) => {
+  const getStepStatusColor = (status: string, overrideDisapproved: boolean = false) => {
+    if (overrideDisapproved) return 'bg-red-100 text-red-700'
     switch (status) {
       case 'PENDING':
         return 'bg-gray-100 text-gray-700'
@@ -358,10 +359,9 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
     (!currentWorkflowStep?.department?.id || user?.departmentIds?.includes(currentWorkflowStep.department.id))
   )
 
-  const isCurrentStepEditor = currentWorkflowStep?.role === 'EDITOR'
   const isCurrentStepDrafter = currentWorkflowStep?.role === 'DRAFTER'
-  const isCurrentStepRequiringFile = isCurrentStepDrafter || isCurrentStepEditor
-  const isCommentRequired = currentWorkflowStep?.role === 'EDITOR' || currentWorkflowStep?.role === 'APPROVER'
+  const isCurrentStepRequiringFile = isCurrentStepDrafter
+  const isCommentRequired = currentWorkflowStep?.role === 'APPROVER' || (isCurrentStepDrafter && doc?.currentStatus === 'CHANGES_REQUESTED')
   const showDisapproveOption = currentWorkflowStep?.role === 'APPROVER'
 
   const isDocumentComplete = doc?.currentStatus === 'APPROVED' || doc?.currentStatus === 'FINAL'
@@ -549,7 +549,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                         <p className="text-xs text-gray-500 uppercase tracking-wide">Created By</p>
                       </div>
                       <p className="font-semibold text-gray-900">{doc.createdBy.name}</p>
-                      <p className="text-xs text-gray-500 capitalize">{doc.createdBy.role.toLowerCase()}</p>
+                      <p className="text-xs text-gray-500 capitalize">{doc.createdBy.role === 'DRAFTER' ? 'Drafter/Editor' : doc.createdBy.role.toLowerCase()}</p>
                     </div>
 
                     <div className="bg-gray-50 rounded-lg p-4">
@@ -635,16 +635,16 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                 <div className="bg-gray-50 rounded-lg p-4">
                   {doc.workflowInstances[0].steps.map((step: WorkflowStep) => (
                     <div key={step.id} className={`flex items-start space-x-4 py-4 ${step.stepOrder < doc.workflowInstances[0].currentStep ? 'opacity-60' : ''}`}>
-                      <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold ${getStepStatusColor(step.status)} ${step.stepOrder === doc.workflowInstances[0].currentStep ? 'ring-2 ring-indigo-500 ring-offset-2' : ''}`}>
+                      <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold ${getStepStatusColor(step.status, step.comment?.startsWith('[DISAPPROVED]'))} ${step.stepOrder === doc.workflowInstances[0].currentStep ? 'ring-2 ring-indigo-500 ring-offset-2' : ''}`}>
                         {step.stepOrder}
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center space-x-2">
                           <p className="text-sm font-semibold text-gray-900">
-                            {step.department?.name || 'General'} - {step.role.toLowerCase()}
+                            {step.department?.name || 'General'} - {step.role === 'DRAFTER' ? 'Drafter/Editor' : step.role.toLowerCase()}
                           </p>
-                          <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${getStepStatusColor(step.status)}`}>
-                            {step.status.replace('_', ' ').toLowerCase()}
+                          <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${getStepStatusColor(step.status, step.comment?.startsWith('[DISAPPROVED]'))}`}>
+                            {step.comment?.startsWith('[DISAPPROVED]') ? 'disapproved' : step.status.replace('_', ' ').toLowerCase()}
                           </span>
                           {step.stepOrder === doc.workflowInstances[0].currentStep && (
                             <div className="flex items-center space-x-2">
@@ -666,19 +666,19 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                           <p>
                             {step.assignedTo
                               ? `Assigned to: ${step.assignedTo.name}`
-                              : `All ${step.role.toLowerCase()}s in ${step.department?.name || 'General'}`
+                              : `All ${step.role === 'DRAFTER' ? 'Drafter/Editors' : step.role.toLowerCase() + 's'} in ${step.department?.name || 'General'}`
                             }
                           </p>
                           {step.completedBy && (
-                            <p>Completed by: {step.completedBy.name} ({step.completedBy.role.toLowerCase()})</p>
+                            <p>Completed by: {step.completedBy.name} ({step.completedBy.role === 'DRAFTER' ? 'Drafter/Editor' : step.completedBy.role.toLowerCase()})</p>
                           )}
                           {step.completedAt && (
                             <p>Completed: {format(new Date(step.completedAt), 'MMM dd, yyyy HH:mm')}</p>
                           )}
                         </div>
                         {step.comment && (
-                          <p className="text-sm text-gray-700 mt-2 bg-white p-3 rounded-lg italic border border-gray-200">
-                            "{step.comment}"
+                          <p className={`text-sm mt-2 p-3 rounded-lg italic border ${step.comment.startsWith('[DISAPPROVED]') ? 'bg-red-50 text-red-700 border-red-200' : 'bg-white text-gray-700 border-gray-200'}`}>
+                            "{step.comment.startsWith('[DISAPPROVED]') ? step.comment.replace('[DISAPPROVED]', '').trim() : step.comment}"
                           </p>
                         )}
                       </div>
@@ -766,8 +766,10 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                       <h4 className="text-sm font-semibold text-green-800">Complete this step</h4>
                       <p className="text-sm text-green-700 mt-1">
                         {isCurrentStepRequiringFile
-                          ? `As a${currentWorkflowStep?.role === 'DRAFTER' ? ' drafter' : 'n editor'}, you must upload a ${currentWorkflowStep?.role === 'DRAFTER' ? 'document to submit your draft' : 'new file version and add a comment to complete this step'}.`
-                          : showDisapproveOption ? 'Add a comment and click Approve to pass it to the next step, or Disapprove to request changes.' : 'Add a comment to complete this step and pass it to the next department.'}
+                          ? doc?.currentStatus === 'CHANGES_REQUESTED'
+                            ? 'An Approver has requested changes. Please upload an edited version of the document and add a comment to address their concerns to complete this step.'
+                            : 'As a Drafter/Editor, you must upload a document to submit your draft.'
+                          : showDisapproveOption ? 'Add a comment and click Approve to pass it to the next step, or Disapprove to send it back to the Drafter/Editor.' : 'Add a comment to complete this step and pass it to the next department.'}
                       </p>
                     </div>
                   </div>

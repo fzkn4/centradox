@@ -274,14 +274,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // For non-drafters, first step must be DRAFTER
-    if (!isDrafter && parsedTimelineSteps[0].role !== 'DRAFTER') {
-      return NextResponse.json(
-        { error: 'Workflow timeline must start with DRAFTER role when creator is not a DRAFTER' },
-        { status: 400 }
-      )
-    }
-
     const parsedDepartmentIds = departmentIds ? JSON.parse(departmentIds) : []
 
     let documentData: any = {

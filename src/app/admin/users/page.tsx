@@ -21,7 +21,7 @@ interface User {
   updatedAt: string
 }
 
-const roles = ['ADMIN', 'EDITOR', 'APPROVER', 'DRAFTER'] as const
+const roles = ['ADMIN', 'APPROVER', 'DRAFTER'] as const
 type Role = typeof roles[number]
 
 export default function UserManagementPage() {
@@ -41,7 +41,7 @@ export default function UserManagementPage() {
     username: '',
     password: '',
     name: '',
-    role: 'EDITOR' as Role,
+    role: 'DRAFTER' as Role,
     departmentIds: [] as string[]
   })
 
@@ -110,7 +110,7 @@ export default function UserManagementPage() {
 
       if (response.ok) {
         setShowCreateModal(false)
-        setFormData({ username: '', password: '', name: '', role: 'EDITOR', departmentIds: [] })
+        setFormData({ username: '', password: '', name: '', role: 'DRAFTER', departmentIds: [] })
         fetchUsers()
         sileo.success({ title: 'User created successfully' })
       } else {
@@ -167,7 +167,7 @@ export default function UserManagementPage() {
         setTimeout(() => {
           setShowEditModal(false)
           setEditingUser(null)
-          setFormData({ username: '', password: '', name: '', role: 'EDITOR', departmentIds: [] })
+          setFormData({ username: '', password: '', name: '', role: 'DRAFTER', departmentIds: [] })
           setEditModalSuccess('')
           setOriginalFormData(null)
         }, 1500)
@@ -322,7 +322,7 @@ export default function UserManagementPage() {
                             user.role === 'DRAFTER' ? 'bg-purple-100 text-purple-800' :
                             'bg-blue-100 text-blue-800'
                           }`}>
-                          {user.role}
+                          {user.role === 'DRAFTER' ? 'DRAFTER/EDITOR' : user.role}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -463,7 +463,7 @@ export default function UserManagementPage() {
                     onClick={() => {
                       setShowEditModal(false)
                       setEditingUser(null)
-                      setFormData({ username: '', password: '', name: '', role: 'EDITOR', departmentIds: [] })
+                      setFormData({ username: '', password: '', name: '', role: 'DRAFTER', departmentIds: [] })
                       setEditModalError('')
                       setEditModalSuccess('')
                       setOriginalFormData(null)
@@ -637,7 +637,7 @@ export default function UserManagementPage() {
                       onClick={() => {
                         setShowEditModal(false)
                         setEditingUser(null)
-                        setFormData({ username: '', password: '', name: '', role: 'EDITOR', departmentIds: [] })
+                        setFormData({ username: '', password: '', name: '', role: 'DRAFTER', departmentIds: [] })
                         setEditModalError('')
                         setEditModalSuccess('')
                         setOriginalFormData(null)

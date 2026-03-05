@@ -4,8 +4,8 @@ export function canUserEditDocument(userRole: string, documentStatus: string, au
     return userRole === 'ADMIN' || authorId === userId
   }
   if (documentStatus === 'DRAFT') {
-    // ADMIN and EDITOR can edit any draft
-    if (userRole === 'ADMIN' || userRole === 'EDITOR') return true
+    // ADMIN can edit any draft
+    if (userRole === 'ADMIN') return true
     // DRAFTER can only edit their own drafts
     if (userRole === 'DRAFTER') return authorId === userId
     // APPROVER cannot edit drafts
