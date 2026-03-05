@@ -166,7 +166,9 @@ export async function POST(
       )
     }
 
-    if (file && !file.name.toLowerCase().endsWith('.docx')) {
+    const isAnnotation = file && file.name.toLowerCase().endsWith('.png') && file.type === 'image/png';
+
+    if (file && !file.name.toLowerCase().endsWith('.docx') && !isAnnotation) {
       return NextResponse.json(
         { error: 'Only .docx files are allowed for security reasons.' },
         { status: 400 }
@@ -174,10 +176,32 @@ export async function POST(
     }
 
     if (action === 'disapprove-step') {
+      let finalComment = `[DISAPPROVED] ${comment.trim()}`
+      if (file && file.size > 0 && isAnnotation) {
+        const latestVersion = await prisma.documentVersion.findFirst({
+          where: { documentId: id },
+          orderBy: { versionNumber: 'desc' }
+        })
+        const versionNumber = latestVersion ? latestVersion.versionNumber + 1 : 1
+        const fileData = await saveFile(file as File)
+        const newVersion = await prisma.documentVersion.create({
+          data: {
+            versionNumber,
+            fileName: fileData.fileName,
+            fileSize: fileData.fileSize,
+            mimeType: fileData.mimeType,
+            filePath: fileData.filePath,
+            documentId: id,
+            createdById: user.userId
+          }
+        })
+        finalComment += `\n\n[Attached Annotation Drawing](/api/documents/${id}/download/${newVersion.id})`
+      }
+
       // Create a comment recording the disapproval reason
       await prisma.comment.create({
         data: {
-          text: `[DISAPPROVED] ${comment.trim()}`,
+          text: finalComment,
           documentId: id,
           authorId: user.userId
         }
@@ -214,7 +238,7 @@ export async function POST(
           status: 'COMPLETED',
           completedAt: new Date(),
           completedById: user.userId,
-          comment: `[DISAPPROVED] ${comment.trim()}`
+          comment: finalComment
         }
       })
 
@@ -294,46 +318,65 @@ export async function POST(
     } else {
       // Original complete-step logic
 
-    if (file && file.size > 0) {
-      const latestVersion = await prisma.documentVersion.findFirst({
-        where: { documentId: id },
-        orderBy: { versionNumber: 'desc' }
-      })
+      let finalComment = comment.trim()
 
-      versionNumber = latestVersion ? latestVersion.versionNumber + 1 : 1
-      const fileData = await saveFile(file)
+      if (file && file.size > 0 && isAnnotation) {
+        const latestVersion = await prisma.documentVersion.findFirst({
+          where: { documentId: id },
+          orderBy: { versionNumber: 'desc' }
+        })
+        const versionNumber = latestVersion ? latestVersion.versionNumber + 1 : 1
+        const fileData = await saveFile(file as File)
+        const newVersion = await prisma.documentVersion.create({
+          data: {
+            versionNumber,
+            fileName: fileData.fileName,
+            fileSize: fileData.fileSize,
+            mimeType: fileData.mimeType,
+            filePath: fileData.filePath,
+            documentId: id,
+            createdById: user.userId
+          }
+        })
+        finalComment += `\n\n[Attached Annotation Drawing](/api/documents/${id}/download/${newVersion.id})`
+      } else if (file && file.size > 0 && !isAnnotation) {
+        const latestVersion = await prisma.documentVersion.findFirst({
+          where: { documentId: id },
+          orderBy: { versionNumber: 'desc' }
+        })
 
-      const newVersion = await prisma.documentVersion.create({
-        data: {
-          versionNumber,
-          fileName: fileData.fileName,
-          fileSize: fileData.fileSize,
-          mimeType: fileData.mimeType,
-          filePath: fileData.filePath,
-          documentId: id,
-          createdById: user.userId
-        }
-      })
+        const versionNumber = latestVersion ? latestVersion.versionNumber + 1 : 1
+        const fileData = await saveFile(file as File)
 
-      versionId = newVersion.id
+        const newVersion = await prisma.documentVersion.create({
+          data: {
+            versionNumber,
+            fileName: fileData.fileName,
+            fileSize: fileData.fileSize,
+            mimeType: fileData.mimeType,
+            filePath: fileData.filePath,
+            documentId: id,
+            createdById: user.userId
+          }
+        })
 
-      await prisma.document.update({
-        where: { id },
-        data: {
-          currentVersionId: newVersion.id
-        }
-      })
-    }
-
-    await prisma.workflowStep.update({
-      where: { id: currentStep.id },
-      data: {
-        status: 'COMPLETED',
-        completedAt: new Date(),
-        comment: comment.trim(),
-        completedById: user.userId
+        await prisma.document.update({
+          where: { id },
+          data: {
+            currentVersionId: newVersion.id
+          }
+        })
       }
-    })
+
+      await prisma.workflowStep.update({
+        where: { id: currentStep.id },
+        data: {
+          status: 'COMPLETED',
+          completedAt: new Date(),
+          comment: finalComment,
+          completedById: user.userId
+        }
+      })
 
     // Create notifications for department users and admins
     try {

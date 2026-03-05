@@ -6,6 +6,8 @@ import { getStatusColor, getStatusLabel } from '@/lib/permissions'
 import { format } from 'date-fns'
 import { sileo } from 'sileo'
 import { renderAsync } from 'docx-preview'
+import { ReactSketchCanvas, ReactSketchCanvasRef } from 'react-sketch-canvas'
+import html2canvas from 'html2canvas'
 
 interface DocumentVersion {
   id: string
@@ -92,6 +94,15 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
   const [previewType, setPreviewType] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const docxContainerRef = useRef<HTMLDivElement>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+
+  // Annotation states
+  const [isAnnotating, setIsAnnotating] = useState(false)
+  const [eraserMode, setEraserMode] = useState(false)
+  const [panMode, setPanMode] = useState(false)
+  const [strokeColor, setStrokeColor] = useState('#ef4444') // Default red
+  const [strokeWidth, setStrokeWidth] = useState(4)
+  const canvasRef = useRef<ReactSketchCanvasRef>(null)
 
   useEffect(() => {
     const renderDocx = async () => {
@@ -263,6 +274,43 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
       sileo.error({ title: 'Failed to load document preview' })
     } finally {
       setPreviewLoading(false)
+    }
+  }
+
+  const handleSaveAnnotation = async () => {
+    if (!wrapperRef.current) return
+    try {
+      setSubmitting(true)
+      
+      const canvasElement = await html2canvas(wrapperRef.current, {
+        scale: 2, // For better resolution/text clarity
+        backgroundColor: '#ffffff', // Explicitly set background so it isn't transparent
+        useCORS: true, 
+        logging: false
+      })
+      
+      const dataUri = canvasElement.toDataURL('image/png')
+      
+      // convert base64 to Blob
+      const byteString = atob(dataUri.split(',')[1])
+      const mimeString = dataUri.split(',')[0].split(':')[1].split(';')[0]
+      const ab = new ArrayBuffer(byteString.length)
+      const ia = new Uint8Array(ab)
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i)
+      }
+      const blob = new Blob([ab], { type: mimeString })
+      const file = new File([blob], `annotated-${documentId}.png`, { type: mimeString })
+      
+      setUploadFile(file)
+      setIsAnnotating(false)
+      setActiveTab('complete')
+      sileo.success({ title: 'Annotation captured! Add a comment and hit Take Action to submit.' })
+    } catch (e) {
+      console.error('Error saving annotation:', e)
+      sileo.error({ title: 'Failed to save annotation' })
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -441,6 +489,44 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
       default:
         return 'bg-gray-100 text-gray-700'
     }
+  }
+
+  const renderCommentWithLinks = (commentStr: string) => {
+    const parts = commentStr.split(/(\[.*?\]\(.*?\))/g);
+    return parts.map((part, i) => {
+      const match = part.match(/\[(.*?)\]\((.*?)\)/);
+      if (match) {
+          const url = match[2];
+          // Check if it's the specific annotation download URL format: /api/documents/{id}/download/{versionId}
+          const downloadMatch = url.match(/\/api\/documents\/[^\/]+\/download\/([^\/]+)$/);
+          
+          if (downloadMatch) {
+            const versionId = downloadMatch[1];
+            return (
+              <button 
+                key={i} 
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleDownloadVersion(versionId, `annotation-${versionId}.png`);
+                }}
+                className="text-indigo-600 hover:text-indigo-800 underline font-medium mx-1 flex items-center inline-flex bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 not-italic cursor-pointer"
+              >
+                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                {match[1]}
+              </button>
+            );
+          }
+
+          // Fallback for standard links
+          return (
+            <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800 underline font-medium mx-1 flex items-center inline-flex bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 not-italic">
+              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+              {match[1]}
+            </a>
+          );
+      }
+      return <span key={i}>{part}</span>;
+    });
   }
 
   const currentWorkflowStep = doc?.workflowInstances?.[0]?.steps.find(
@@ -805,8 +891,8 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                           )}
                         </div>
                         {step.comment && (
-                          <p className={`text-sm mt-2 p-3 rounded-lg italic border ${step.comment.startsWith('[DISAPPROVED]') ? 'bg-red-50 text-red-700 border-red-200' : 'bg-white text-gray-700 border-gray-200'}`}>
-                            "{step.comment.startsWith('[DISAPPROVED]') ? step.comment.replace('[DISAPPROVED]', '').trim() : step.comment}"
+                          <p className={`text-sm mt-2 p-3 rounded-lg italic whitespace-pre-wrap border ${step.comment.startsWith('[DISAPPROVED]') ? 'bg-red-50 text-red-700 border-red-200' : 'bg-white text-gray-700 border-gray-200'}`}>
+                            "{renderCommentWithLinks(step.comment.startsWith('[DISAPPROVED]') ? step.comment.replace('[DISAPPROVED]', '').trim() : step.comment)}"
                           </p>
                         )}
                       </div>
@@ -822,14 +908,106 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                   <span className="text-sm font-medium text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis">
                     Document Preview &middot; {previewType}
                   </span>
-                  <button 
-                    onClick={() => setActiveTab('details')}
-                    className="text-sm text-indigo-600 hover:text-indigo-800"
-                  >
-                    Close Preview
-                  </button>
+                  <div className="flex items-center space-x-4">
+                    {previewType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' && canCompleteStep && (
+                      <button
+                        onClick={() => {
+                          const newState = !isAnnotating;
+                          setIsAnnotating(newState);
+                          if (!newState) {
+                            setPanMode(false);
+                            setEraserMode(false);
+                          }
+                        }}
+                        className={`text-sm px-3 py-1.5 rounded-md font-medium transition-colors ${isAnnotating ? 'bg-indigo-600 text-white shadow-sm' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}
+                      >
+                        {isAnnotating ? 'Exit Annotation' : 'Draw Annotation'}
+                      </button>
+                    )}
+                    <button 
+                      onClick={() => setActiveTab('details')}
+                      className="text-sm text-gray-600 hover:text-gray-900"
+                    >
+                      Close Preview
+                    </button>
+                  </div>
                 </div>
-                <div className="flex-1 w-full flex items-center justify-center bg-gray-100 overflow-auto">
+
+                {/* Annotation Toolbar */}
+                {isAnnotating && (
+                  <div className="bg-indigo-50 border-b border-indigo-100 p-2 flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => { setPanMode(false); setEraserMode(false); canvasRef.current?.eraseMode(false) }}
+                          className={`p-2 rounded ${!panMode && !eraserMode ? 'bg-indigo-200 text-indigo-800' : 'text-gray-600 hover:bg-indigo-100'}`}
+                          title="Draw"
+                        >
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => { setPanMode(false); setEraserMode(true); canvasRef.current?.eraseMode(true) }}
+                          className={`p-2 rounded ${!panMode && eraserMode ? 'bg-indigo-200 text-indigo-800' : 'text-gray-600 hover:bg-indigo-100'}`}
+                          title="Erase"
+                        >
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                        <div className="h-6 w-px bg-indigo-200 mx-1"></div>
+                        <button
+                          onClick={() => { setPanMode(true) }}
+                          className={`p-2 rounded flex items-center space-x-1 ${panMode ? 'bg-indigo-200 text-indigo-800' : 'text-gray-600 hover:bg-indigo-100'}`}
+                          title="Pan/Scroll"
+                        >
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11V7a5 5 0 0110 0v4m-5 8v-8m0 0l-3 3m3-3l3 3" />
+                          </svg>
+                        </button>
+                      </div>
+                      
+                      <div className="h-6 w-px bg-indigo-200 mx-2"></div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <label className="text-xs font-medium text-indigo-900">Color:</label>
+                        <input 
+                          type="color" 
+                          value={strokeColor} 
+                          onChange={(e) => setStrokeColor(e.target.value)}
+                          className="w-8 h-8 rounded cursor-pointer border-0 p-0"
+                          disabled={eraserMode}
+                        />
+                      </div>
+                      
+                      <div className="flex items-center space-x-2 ml-4">
+                        <label className="text-xs font-medium text-indigo-900">px: {strokeWidth}</label>
+                        <input 
+                          type="range" 
+                          min="1" max="20" 
+                          value={strokeWidth} 
+                          onChange={(e) => setStrokeWidth(parseInt(e.target.value))}
+                          className="w-24"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-3">
+                      <button onClick={() => canvasRef.current?.undo()} className="text-sm px-3 py-1.5 text-indigo-700 bg-white border border-indigo-200 hover:bg-indigo-50 rounded">Undo</button>
+                      <button onClick={() => canvasRef.current?.clearCanvas()} className="text-sm px-3 py-1.5 text-red-600 bg-white border border-red-200 hover:bg-red-50 rounded">Clear All</button>
+                      <button 
+                        onClick={handleSaveAnnotation} 
+                        disabled={submitting}
+                        className="text-sm px-4 py-1.5 text-white bg-indigo-600 hover:bg-indigo-700 rounded shadow-sm font-medium flex items-center"
+                      >
+                        {submitting ? 'Saving...' : 'Attach Annotation'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex-1 w-full flex items-center justify-center bg-gray-100 overflow-auto relative">
                   {previewType?.startsWith('image/') ? (
                     <img src={previewUrl} alt="Document Preview" className="max-w-full max-h-full object-contain shadow-sm bg-white" />
                   ) : previewType === 'application/pdf' ? (
@@ -839,8 +1017,22 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                       </iframe>
                     </object>
                   ) : previewType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ? (
-                    <div style={{ position: 'relative', width: '100%', height: '100%', border: '1px solid #ddd', backgroundColor: '#f3f4f6' }}>
-                      <div ref={docxContainerRef} style={{ height: '100%', overflowY: 'auto' }} className="docx-preview-container" />
+                    <div style={{ position: 'relative', width: '100%', height: '100%', border: '1px solid #ddd', backgroundColor: '#f3f4f6', overflowY: 'auto', overflowX: 'auto' }}>
+                      <div ref={wrapperRef} style={{ position: 'relative', minWidth: '100%', minHeight: '100%', width: 'fit-content' }}>
+                        <div ref={docxContainerRef} className="docx-preview-container select-none" />
+                        {isAnnotating && (
+                          <div className="absolute top-0 left-0 w-full h-full z-10" style={{ pointerEvents: panMode ? 'none' : 'auto' }}>
+                            <ReactSketchCanvas
+                              ref={canvasRef}
+                              style={{ border: 'none', background: 'transparent' }}
+                              strokeWidth={strokeWidth}
+                              strokeColor={strokeColor}
+                              eraserWidth={strokeWidth * 2}
+                              canvasColor="transparent"
+                            />
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ) : previewType === 'text/plain' ? (
                     <iframe src={previewUrl} className="w-full h-full bg-white shadow-sm border-0 p-4" />
