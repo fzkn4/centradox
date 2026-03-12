@@ -16,6 +16,7 @@ interface User {
   username: string
   name: string
   role: string
+  phoneNumber: string | null
   departments: Department[]
   createdAt: string
   updatedAt: string
@@ -41,6 +42,7 @@ export default function UserManagementPage() {
     username: '',
     password: '',
     name: '',
+    phoneNumber: '',
     role: 'DRAFTER' as Role,
     departmentIds: [] as string[]
   })
@@ -110,7 +112,7 @@ export default function UserManagementPage() {
 
       if (response.ok) {
         setShowCreateModal(false)
-        setFormData({ username: '', password: '', name: '', role: 'DRAFTER', departmentIds: [] })
+        setFormData({ username: '', password: '', name: '', phoneNumber: '', role: 'DRAFTER', departmentIds: [] })
         fetchUsers()
         sileo.success({ title: 'User created successfully' })
       } else {
@@ -167,7 +169,7 @@ export default function UserManagementPage() {
         setTimeout(() => {
           setShowEditModal(false)
           setEditingUser(null)
-          setFormData({ username: '', password: '', name: '', role: 'DRAFTER', departmentIds: [] })
+          setFormData({ username: '', password: '', name: '', phoneNumber: '', role: 'DRAFTER', departmentIds: [] })
           setEditModalSuccess('')
           setOriginalFormData(null)
         }, 1500)
@@ -214,6 +216,7 @@ export default function UserManagementPage() {
       username: user.username,
       password: '', // Don't prefill password
       name: user.name,
+      phoneNumber: user.phoneNumber || '',
       role: user.role as Role,
       departmentIds: user.departments.map(d => d.id)
     }
@@ -287,6 +290,9 @@ export default function UserManagementPage() {
                       Role
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Contact
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Departments
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -324,6 +330,9 @@ export default function UserManagementPage() {
                           }`}>
                           {user.role === 'DRAFTER' ? 'DRAFTER/EDITOR' : user.role}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {user.phoneNumber ? user.phoneNumber : <span className="text-gray-400 italic">Not set</span>}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {user.departments.map(d => d.name).join(', ')}
@@ -388,6 +397,16 @@ export default function UserManagementPage() {
                       required
                       value={formData.name}
                       onChange={(e) => setFormData({...formData, name: e.target.value})}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-gray-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Phone Number</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.phoneNumber}
+                      onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})}
                       className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-gray-900"
                     />
                   </div>
@@ -463,7 +482,7 @@ export default function UserManagementPage() {
                     onClick={() => {
                       setShowEditModal(false)
                       setEditingUser(null)
-                      setFormData({ username: '', password: '', name: '', role: 'DRAFTER', departmentIds: [] })
+                      setFormData({ username: '', password: '', name: '', phoneNumber: '', role: 'DRAFTER', departmentIds: [] })
                       setEditModalError('')
                       setEditModalSuccess('')
                       setOriginalFormData(null)
@@ -577,6 +596,23 @@ export default function UserManagementPage() {
                   </div>
 
                   <div>
+                    <label htmlFor="edit-phonenumber" className="block text-sm font-medium text-gray-700">
+                      Phone Number <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="edit-phonenumber"
+                      type="text"
+                      required
+                      value={formData.phoneNumber}
+                      onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})}
+                      className={`mt-1 block w-full border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900 transition-colors ${
+                        formData.phoneNumber !== originalFormData?.phoneNumber ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300'
+                      }`}
+                      disabled={isSubmitting}
+                    />
+                  </div>
+
+                  <div>
                     <label htmlFor="edit-password" className="block text-sm font-medium text-gray-700">
                       Password
                       <span className="text-gray-500 ml-2">(leave blank to keep current)</span>
@@ -637,7 +673,7 @@ export default function UserManagementPage() {
                       onClick={() => {
                         setShowEditModal(false)
                         setEditingUser(null)
-                        setFormData({ username: '', password: '', name: '', role: 'DRAFTER', departmentIds: [] })
+                        setFormData({ username: '', password: '', name: '', phoneNumber: '', role: 'DRAFTER', departmentIds: [] })
                         setEditModalError('')
                         setEditModalSuccess('')
                         setOriginalFormData(null)

@@ -184,7 +184,10 @@ export function DraggableFAB() {
                   // Mark all as read
                   const unreadNotifications = notifications.filter(n => !n.read)
                   for (const notification of unreadNotifications) {
-                    await fetch(`/api/notifications/${notification.id}/read`, { method: 'POST' })
+                    await fetch(`/api/notifications/${notification.id}/read`, {
+                      method: 'POST',
+                      headers: { Authorization: `Bearer ${token}` }
+                    })
                   }
                   markAllAsRead()
                 }}
@@ -255,7 +258,10 @@ export function DraggableFAB() {
                             <button
                               onClick={async (e) => {
                                 e.stopPropagation()
-                                await fetch(`/api/notifications/${notification.id}/read`, { method: 'POST' })
+                                await fetch(`/api/notifications/${notification.id}/read`, {
+                                  method: 'POST',
+                                  headers: { Authorization: `Bearer ${token}` }
+                                })
                                 markAsRead(notification.id)
                               }}
                               className="text-gray-400 hover:text-gray-600 p-1 rounded transition-colors"

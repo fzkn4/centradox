@@ -27,6 +27,7 @@ export async function GET(
         username: true,
         name: true,
         role: true,
+        phoneNumber: true,
         departments: {
           select: {
             id: true,
@@ -66,11 +67,11 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const { username, password, name, role, departmentIds } = body
+    const { username, password, name, role, departmentIds, phoneNumber } = body
 
-    if (!username || !name) {
+    if (!username || !name || !phoneNumber) {
       return NextResponse.json(
-        { error: 'Username and name are required' },
+        { error: 'Username, name, and phone number are required' },
         { status: 400 }
       )
     }
@@ -88,7 +89,8 @@ export async function PUT(
     const updateData: any = {
       username,
       name,
-      role
+      role,
+      phoneNumber
     }
 
     // Handle department assignments
@@ -111,6 +113,7 @@ export async function PUT(
         username: true,
         name: true,
         role: true,
+        phoneNumber: true,
         departments: {
           select: {
             id: true,

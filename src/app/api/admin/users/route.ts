@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
         username: true,
         name: true,
         role: true,
+        phoneNumber: true,
         departments: {
           select: {
             id: true,
@@ -55,11 +56,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { username, password, name, role, departmentIds } = body
+    const { username, password, name, role, departmentIds, phoneNumber } = body
 
-    if (!username || !password || !name) {
+    if (!username || !password || !name || !phoneNumber) {
       return NextResponse.json(
-        { error: 'Username, password, and name are required' },
+        { error: 'Username, password, name, and phone number are required' },
         { status: 400 }
       )
     }
@@ -83,6 +84,7 @@ export async function POST(request: NextRequest) {
         username,
         password: hashedPassword,
         name,
+        phoneNumber,
         role: role || 'DRAFTER',
         departments: departmentIds && departmentIds.length > 0 ? {
           connect: departmentIds.map((id: string) => ({ id }))
@@ -93,6 +95,7 @@ export async function POST(request: NextRequest) {
         username: true,
         name: true,
         role: true,
+        phoneNumber: true,
         departments: {
           select: {
             id: true,
