@@ -59,6 +59,7 @@ export async function GET(request: NextRequest) {
     const statusGroup = searchParams.get('statusGroup')
     const overdue = searchParams.get('overdue') === 'true'
     const dueSoon = searchParams.get('dueSoon') === 'true'
+    const complianceType = searchParams.get('complianceType')
 
     const where: any = {}
 
@@ -80,6 +81,10 @@ export async function GET(request: NextRequest) {
 
     if (priority) {
       where.priority = priority
+    }
+
+    if (complianceType) {
+      where.complianceType = complianceType
     }
 
     if (overdue) {
@@ -235,6 +240,7 @@ export async function POST(request: NextRequest) {
     const priority = formData.get('priority') as string
     const deadline = formData.get('deadline') as string | null
     const timelineSteps = formData.get('timelineSteps') as string | null
+    const complianceType = formData.get('complianceType') as string | null
 
     if (!title || !type) {
       return NextResponse.json(
@@ -290,6 +296,7 @@ export async function POST(request: NextRequest) {
       currentStatus: 'DRAFT',
       createdById: user.userId,
       priority: (priority as any) || 'RESTRICTED',
+      complianceType: (complianceType as any) || null,
       deadline: deadline ? new Date(deadline) : null,
       departments: parsedDepartmentIds.length > 0 ? {
         create: parsedDepartmentIds.map((deptId: string) => ({ departmentId: deptId }))

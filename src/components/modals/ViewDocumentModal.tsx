@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useAuthStore } from '@/lib/store'
-import { getStatusColor, getStatusLabel } from '@/lib/permissions'
+import { getStatusColor, getStatusLabel, getComplianceTypeLabel } from '@/lib/permissions'
 import { format } from 'date-fns'
 import { sileo } from 'sileo'
 import { renderAsync } from 'docx-preview'
@@ -63,6 +63,7 @@ interface DocumentData {
   type: string
   currentStatus: string
   priority: string
+  complianceType: string | null
   deadline: string | null
   createdAt: string
   updatedAt: string
@@ -755,8 +756,22 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                         </svg>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-500 uppercase tracking-wide">Priority</p>
+                        <p className="text-xs text-gray-500 uppercase tracking-wide">Classification</p>
                         <p className="font-semibold text-gray-900">{doc.priority}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 rounded-lg bg-indigo-100 text-indigo-600">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 uppercase tracking-wide">Type of Compliance</p>
+                        <p className="font-semibold text-gray-900">{getComplianceTypeLabel(doc.complianceType)}</p>
                       </div>
                     </div>
                   </div>

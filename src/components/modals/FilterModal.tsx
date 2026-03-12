@@ -21,6 +21,7 @@ export interface FilterState {
   overdue: boolean
   dueSoon: boolean
   department: string
+  complianceType: string
 }
 
 export const initialFilterState: FilterState = {
@@ -33,7 +34,8 @@ export const initialFilterState: FilterState = {
   endDate: '',
   overdue: false,
   dueSoon: false,
-  department: ''
+  department: '',
+  complianceType: ''
 }
 
 export function FilterModal({ isOpen, onClose, onApply, currentFilters }: FilterModalProps) {
@@ -131,7 +133,7 @@ export function FilterModal({ isOpen, onClose, onApply, currentFilters }: Filter
           {activeTab === 'general' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Document Type</label>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Requested Action</label>
                 <select
                   value={filters.type}
                   onChange={(e) => setFilters({ ...filters, type: e.target.value })}
@@ -159,15 +161,34 @@ export function FilterModal({ isOpen, onClose, onApply, currentFilters }: Filter
                   ))}
                 </select>
               </div>
+ 
+               <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Type of Compliance</label>
+                <select
+                  value={filters.complianceType}
+                  onChange={(e) => setFilters({ ...filters, complianceType: e.target.value })}
+                  className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-gray-900"
+                >
+                  <option value="">All Compliance Types</option>
+                  <option value="PRIORITY_ACTION">Priority</option>
+                  <option value="URGENT_RUSH">Urgent/Rush</option>
+                  <option value="DAILY">Daily</option>
+                  <option value="WEEKLY">Weekly</option>
+                  <option value="MONTHLY">Monthly</option>
+                  <option value="PERIODIC">Periodic</option>
+                  <option value="QUARTERLY">Quarterly</option>
+                  <option value="ANNUALLY">Annually</option>
+                </select>
+              </div>
             </div>
           )}
 
           {activeTab === 'status' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-3">Priority Level</label>
+                <label className="block text-sm font-bold text-gray-700 mb-3">Classification Level</label>
                 <div className="grid grid-cols-2 gap-3">
-                  {['RESTRICTED', 'CONFIDENTIAL', 'SECRET', 'TOP_SECRET'].map((p) => (
+                  {['CONFIDENTIAL', 'RESTRICTED', 'SECRET', 'TOP_SECRET'].map((p) => (
                     <button
                       key={p}
                       onClick={() => setFilters({ ...filters, priority: filters.priority === p ? '' : p })}

@@ -44,3 +44,17 @@ export function getStatusLabel(status: string): string {
   }
   return labels[status] || status
 }
+
+export function getComplianceTypeLabel(type: string | null): string {
+  const labels: Record<string, string> = {
+    PRIORITY_ACTION: 'Priority',
+    URGENT_RUSH: 'Urgent/Rush',
+    DAILY: 'Daily',
+    WEEKLY: 'Weekly',
+    MONTHLY: 'Monthly',
+    PERIODIC: 'Periodic',
+    QUARTERLY: 'Quarterly',
+    ANNUALLY: 'Annually',
+  }
+  return type ? (labels[type] || type) : 'None'
+}

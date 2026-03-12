@@ -30,6 +30,17 @@ enum Priority {
   TOP_SECRET
 }
 
+enum ComplianceType {
+  PRIORITY_ACTION
+  URGENT_RUSH
+  DAILY
+  WEEKLY
+  MONTHLY
+  PERIODIC
+  QUARTERLY
+  ANNUALLY
+}
+
 enum WorkflowStepStatus {
   PENDING
   IN_PROGRESS
@@ -77,6 +88,7 @@ model Document {
   currentVersionId  String?
   lockedBy          String?
   priority          Priority          @default(RESTRICTED)
+  complianceType    ComplianceType?
   deadline          DateTime?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt

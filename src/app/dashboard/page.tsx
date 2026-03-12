@@ -121,6 +121,7 @@ export default function DashboardPage() {
       
       const deptFilter = selectedDepartment !== 'all' ? selectedDepartment : activeFilters.department
       if (deptFilter) params.append('department', deptFilter)
+      if (activeFilters.complianceType) params.append('complianceType', activeFilters.complianceType)
       if (activeFilters.timeframe !== 'all') params.append('timeframe', activeFilters.timeframe)
       if (activeFilters.timeframe === 'custom') {
         if (activeFilters.startDate) params.append('startDate', activeFilters.startDate)
@@ -403,7 +404,7 @@ export default function DashboardPage() {
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-yellow-600 text-sm font-medium">Critical Priority</p>
+                <p className="text-yellow-600 text-sm font-medium">Critical Classification</p>
                 <p className="text-3xl font-bold text-yellow-700 mt-1">{stats.topSecret + stats.secret}</p>
               </div>
               <svg className="w-8 h-8 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -610,8 +611,8 @@ export default function DashboardPage() {
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/50">
                     <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Document</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Type & Dept</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Priority</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Requested Action & Dept</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Classification</th>
                     <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status</th>
                     <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Progress</th>
                     <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">Deadline</th>

@@ -36,7 +36,8 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
     title: '',
     type: 'Proposal',
     departmentIds: [] as string[],
-    priority: 'RESTRICTED',
+    priority: 'CONFIDENTIAL',
+    complianceType: '',
     deadline: ''
   })
   const [departments, setDepartments] = useState<Department[]>([])
@@ -216,6 +217,9 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
     }
     formDataToSend.append('departmentIds', JSON.stringify(formData.departmentIds))
     formDataToSend.append('priority', formData.priority)
+    if (formData.complianceType) {
+      formDataToSend.append('complianceType', formData.complianceType)
+    }
     if (formData.deadline) {
       formDataToSend.append('deadline', formData.deadline)
     }
@@ -245,7 +249,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
       onDocumentCreated()
       onClose()
       // Reset form
-      setFormData({ title: '', type: 'Proposal', departmentIds: [], priority: 'RESTRICTED', deadline: '' })
+      setFormData({ title: '', type: 'Proposal', departmentIds: [], priority: 'RESTRICTED', complianceType: '', deadline: '' })
       setTimelineSteps([])
       setStepToAdd({ departmentId: '', role: 'APPROVER' })
       setFile(null)
@@ -324,7 +328,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
     if (ext === 'pdf') {
       return (
         <svg className={`${iconClass} text-red-500`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0016.586V3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0016.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
         </svg>
       )
     }
@@ -344,7 +348,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
     }
     return (
       <svg className={`${iconClass} text-gray-500`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0016.586V3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0016.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
       </svg>
     )
   }
@@ -402,9 +406,9 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
               </div>
 
               <div>
-                <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">
-                  Document Type
-                </label>
+                  <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">
+                    Requested Action
+                  </label>
                   <select
                     id="type"
                     value={formData.type}
@@ -494,21 +498,43 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
                   </div>
                 </div>
                <div>
-                 <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-1">
-                   Priority
-                 </label>
-                 <select
-                   id="priority"
-                   value={formData.priority}
-                   onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
-                 >
-                   <option value="RESTRICTED">Restricted</option>
-                   <option value="CONFIDENTIAL">Confidential</option>
-                   <option value="SECRET">Secret</option>
-                   <option value="TOP_SECRET">Top Secret</option>
-                 </select>
-               </div>
+                  <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-1">
+                    Classification
+                  </label>
+                  <select
+                    id="priority"
+                    value={formData.priority}
+                    onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
+                  >
+                    <option value="CONFIDENTIAL">Confidential</option>
+                    <option value="RESTRICTED">Restricted</option>
+                    <option value="SECRET">Secret</option>
+                    <option value="TOP_SECRET">Top Secret</option>
+                  </select>
+                </div>
+ 
+                <div>
+                  <label htmlFor="complianceType" className="block text-sm font-medium text-gray-700 mb-1">
+                    Type of Compliance
+                  </label>
+                  <select
+                    id="complianceType"
+                    value={formData.complianceType}
+                    onChange={(e) => setFormData({ ...formData, complianceType: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900"
+                  >
+                    <option value="">None</option>
+                    <option value="PRIORITY_ACTION">Priority</option>
+                    <option value="URGENT_RUSH">Urgent/Rush</option>
+                    <option value="DAILY">Daily</option>
+                    <option value="WEEKLY">Weekly</option>
+                    <option value="MONTHLY">Monthly</option>
+                    <option value="PERIODIC">Periodic</option>
+                    <option value="QUARTERLY">Quarterly</option>
+                    <option value="ANNUALLY">Annually</option>
+                  </select>
+                </div>
 
                <div>
                  <label htmlFor="deadline" className="block text-sm font-medium text-gray-700 mb-1">
@@ -718,7 +744,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
                   {referenceFile ? (
                     <div className="flex items-center justify-center space-x-4">
                       <svg className="w-16 h-16 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0016.586V3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0016.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                       </svg>
                       <div className="text-left">
                         <p className="text-sm font-semibold text-gray-900">{referenceFile.name}</p>
