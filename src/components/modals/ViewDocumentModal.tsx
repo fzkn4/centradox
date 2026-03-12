@@ -674,7 +674,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                       : 'border-transparent text-gray-500 hover:text-gray-700'
                   }`}
                 >
-                  Version History ({doc.versions.length})
+                  Version History ({doc.versions.filter((v: DocumentVersion) => v.mimeType !== 'image/png').length})
                 </button>
                 {(previewUrl || previewLoading) && (
                   <button
@@ -766,7 +766,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 uppercase tracking-wide">Versions</p>
-                        <p className="font-semibold text-gray-900">{doc.versions.length}</p>
+                        <p className="font-semibold text-gray-900">{doc.versions.filter((v: DocumentVersion) => v.mimeType !== 'image/png').length}</p>
                       </div>
                     </div>
                   </div>
