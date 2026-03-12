@@ -230,6 +230,7 @@ export async function POST(request: NextRequest) {
     const title = formData.get('title') as string
     const type = formData.get('type') as string
     const file = formData.get('file') as File | null
+    const referenceFile = formData.get('referenceFile') as File | null
     const departmentIds = formData.get('departmentIds') as string | null
     const priority = formData.get('priority') as string
     const deadline = formData.get('deadline') as string | null
@@ -293,6 +294,14 @@ export async function POST(request: NextRequest) {
       departments: parsedDepartmentIds.length > 0 ? {
         create: parsedDepartmentIds.map((deptId: string) => ({ departmentId: deptId }))
       } : undefined
+    }
+
+    if (referenceFile) {
+      const refData = await saveFile(referenceFile)
+      documentData.referenceFileName = refData.fileName
+      documentData.referenceFileSize = refData.fileSize
+      documentData.referenceMimeType = refData.mimeType
+      documentData.referenceFilePath = refData.filePath
     }
 
     // Only create version if file is provided

@@ -83,6 +83,11 @@ model Document {
   createdBy    User              @relation("CreatedDocuments", fields: [createdById], references: [id])
   createdById   String
 
+  referenceFileName String?
+  referenceFileSize Int?
+  referenceMimeType String?
+  referenceFilePath String?
+
     departments       DocumentDepartments[] @relation("DocumentDepartments")
 
     versions          DocumentVersion[]

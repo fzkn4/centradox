@@ -72,6 +72,10 @@ interface DocumentData {
       name: string
     }
   }[]
+  referenceFilePath: string | null
+  referenceFileName: string | null
+  referenceMimeType: string | null
+  referenceFileSize: number | null
   currentVersionId: string | null
   versions: DocumentVersion[]
   workflowInstances: WorkflowInstance[]
@@ -235,6 +239,36 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
     } catch (err) {
       console.error('Failed to download:', err)
       sileo.error({ title: 'Failed to download file' })
+    }
+  }
+
+  const handleDownloadReference = async () => {
+    if (!documentId || !doc?.referenceFilePath) return
+
+    try {
+      const response = await fetch(`/api/documents/${documentId}/download-reference`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to download reference file')
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = window.document.createElement('a')
+      a.href = url
+      a.download = doc.referenceFileName || `reference-${documentId}`
+      window.document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      window.document.body.removeChild(a)
+      sileo.success({ title: 'Reference downloaded successfully' })
+    } catch (err) {
+      console.error('Failed to download reference:', err)
+      sileo.error({ title: 'Failed to download reference file' })
     }
   }
 
@@ -785,6 +819,31 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                     </div>
                   </div>
                 </div>
+
+                {doc.referenceFilePath && (
+                  <div className="border-t border-gray-200 pt-6">
+                    <h4 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">Reference Document</h4>
+                    <div className="bg-white border border-gray-200 rounded-lg p-4 flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
+                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">{doc.referenceFileName}</p>
+                          <p className="text-xs text-gray-500">{doc.referenceFileSize ? formatFileSize(doc.referenceFileSize) : 'Unknown size'}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleDownloadReference}
+                        className="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      >
+                        Download
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex justify-end pt-4 border-t border-gray-200 space-x-3">
                   {canCompleteStep && !isDocumentComplete && (
