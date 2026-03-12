@@ -21,6 +21,7 @@ export default function DashboardPage() {
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null)
   const [activeFilters, setActiveFilters] = useState<FilterState>(initialFilterState)
   const [baseFilter, setBaseFilter] = useState('all')
+  const [searchQuery, setSearchQuery] = useState('')
   const { viewMode, setViewMode } = useUiStore()
   const { socket } = useSocket()
 
@@ -140,7 +141,11 @@ export default function DashboardPage() {
 
       if (response.ok) {
         const data = await response.json()
-        setDocuments(data.documents)
+        // Ensure documents are sorted by date (newest first)
+        const sortedDocs = (data.documents || []).sort((a: any, b: any) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )
+        setDocuments(sortedDocs)
       }
     } catch (error) {
       console.error('Failed to load documents:', error)
@@ -148,6 +153,17 @@ export default function DashboardPage() {
       setLoading(false)
     }
   }, [baseFilter, activeFilters, selectedDepartment, token, setLoading, setDocuments])
+
+  // Filter documents by search query locally for fast UX
+  const filteredDocuments = useMemo(() => {
+    if (!searchQuery.trim()) return documents
+    
+    const query = searchQuery.toLowerCase()
+    return documents.filter((doc: any) => 
+      doc.title.toLowerCase().includes(query) ||
+      doc.type.toLowerCase().includes(query)
+    )
+  }, [documents, searchQuery])
 
   useEffect(() => {
     if (isHydrated && !isAuthenticated) {
@@ -453,7 +469,22 @@ export default function DashboardPage() {
               </select>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 mt-4 w-full md:mt-0 md:w-auto flex-1 md:flex-initial justify-end">
+              <div className="relative w-full md:w-64">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search documents..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-xl leading-5 bg-gray-50 text-gray-900 placeholder-gray-500 focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
+                />
+              </div>
+
               <button
                 onClick={() => setFilterModalOpen(true)}
                 className="relative p-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl border border-gray-200 transition-all flex items-center space-x-2 px-4 group"
@@ -504,11 +535,13 @@ export default function DashboardPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               <p className="text-lg font-medium">No documents found</p>
-              <p className="text-sm mt-1">Create your first document to get started!</p>
+              <p className="text-sm mt-1">
+                {searchQuery ? `No results match "${searchQuery}"` : "Create your first document to get started!"}
+              </p>
             </div>
           ) : viewMode === 'cards' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in duration-500">
-              {documents.map((doc) => {
+              {filteredDocuments.map((doc) => {
                 const deadlineStatus = getDeadlineStatus(doc.deadline, doc)
                 const workflowProgress = getWorkflowProgress(doc)
 
@@ -586,7 +619,7 @@ export default function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {documents.map((doc) => {
+                  {filteredDocuments.map((doc) => {
                     const deadlineStatus = getDeadlineStatus(doc.deadline, doc)
                     const workflowProgress = getWorkflowProgress(doc)
                     
