@@ -153,6 +153,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
   const [isConfidentialComment, setIsConfidentialComment] = useState(false)
   const [confidentialComment, setConfidentialComment] = useState('')
   const [confidentialCommentVisibleTo, setConfidentialCommentVisibleTo] = useState<string[]>([])
+  const [zoomLevel, setZoomLevel] = useState(1)
   
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -1048,6 +1049,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                           if (!newState) {
                             setPanMode(false);
                             setEraserMode(false);
+                            setZoomLevel(1);
                           }
                         }}
                         className={`text-sm px-3 py-1.5 rounded-md font-medium transition-colors ${isAnnotating ? 'bg-indigo-600 text-white shadow-sm' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}
@@ -1066,8 +1068,8 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
 
                 {/* Annotation Toolbar */}
                 {isAnnotating && (
-                  <div className="bg-indigo-50 border-b border-indigo-100 p-2 flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
+                  <div className="bg-indigo-50 border-b border-indigo-100 p-2 flex flex-col md:flex-row items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-4">
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={() => { setPanMode(false); setEraserMode(false); canvasRef.current?.eraseMode(false) }}
@@ -1112,7 +1114,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                         />
                       </div>
                       
-                      <div className="flex items-center space-x-2 ml-4">
+                      <div className="flex items-center space-x-2">
                         <label className="text-xs font-medium text-indigo-900">px: {strokeWidth}</label>
                         <input 
                           type="range" 
@@ -1122,15 +1124,22 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                           className="w-24"
                         />
                       </div>
+                      
+                      <div className="flex items-center space-x-2 md:hidden bg-white px-2 py-1 rounded border border-indigo-200 shadow-sm">
+                        <label className="text-xs font-bold text-indigo-900 mr-1">Zoom:</label>
+                        <button onClick={() => setZoomLevel(z => Math.max(0.5, z - 0.25))} className="w-6 h-6 flex items-center justify-center rounded bg-indigo-100 text-indigo-800 hover:bg-indigo-200 font-bold">-</button>
+                        <span className="text-xs font-medium w-8 text-center">{Math.round(zoomLevel * 100)}%</span>
+                        <button onClick={() => setZoomLevel(z => Math.min(3, z + 0.25))} className="w-6 h-6 flex items-center justify-center rounded bg-indigo-100 text-indigo-800 hover:bg-indigo-200 font-bold">+</button>
+                      </div>
                     </div>
                     
-                    <div className="flex items-center space-x-3">
-                      <button onClick={() => canvasRef.current?.undo()} className="text-sm px-3 py-1.5 text-indigo-700 bg-white border border-indigo-200 hover:bg-indigo-50 rounded">Undo</button>
-                      <button onClick={() => canvasRef.current?.clearCanvas()} className="text-sm px-3 py-1.5 text-red-600 bg-white border border-red-200 hover:bg-red-50 rounded">Clear All</button>
+                    <div className="flex flex-wrap items-center gap-2 md:space-x-3 w-full md:w-auto justify-end">
+                      <button onClick={() => canvasRef.current?.undo()} className="text-sm px-3 py-1.5 text-indigo-700 bg-white border border-indigo-200 hover:bg-indigo-50 rounded flex-1 md:flex-none">Undo</button>
+                      <button onClick={() => canvasRef.current?.clearCanvas()} className="text-sm px-3 py-1.5 text-red-600 bg-white border border-red-200 hover:bg-red-50 rounded flex-1 md:flex-none">Clear</button>
                       <button 
                         onClick={handleSaveAnnotation} 
                         disabled={submitting}
-                        className="text-sm px-4 py-1.5 text-white bg-indigo-600 hover:bg-indigo-700 rounded shadow-sm font-medium flex items-center"
+                        className="text-sm px-4 py-1.5 text-white bg-indigo-600 hover:bg-indigo-700 rounded shadow-sm font-medium flex items-center justify-center w-full md:w-auto mt-2 md:mt-0"
                       >
                         {submitting ? 'Saving...' : 'Attach Annotation'}
                       </button>
@@ -1149,10 +1158,10 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                     </object>
                   ) : previewType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ? (
                     <div style={{ position: 'relative', width: '100%', height: '100%', border: '1px solid #ddd', backgroundColor: '#f3f4f6', overflowY: 'auto', overflowX: 'auto' }}>
-                      <div ref={wrapperRef} style={{ position: 'relative', minWidth: '100%', minHeight: '100%', width: 'fit-content' }}>
+                      <div ref={wrapperRef} style={{ position: 'relative', minWidth: '100%', minHeight: '100%', width: 'fit-content', transform: `scale(${zoomLevel})`, transformOrigin: 'top left' }}>
                         <div ref={docxContainerRef} className="docx-preview-container select-none" />
                         {isAnnotating && (
-                          <div className="absolute top-0 left-0 w-full h-full z-10" style={{ pointerEvents: panMode ? 'none' : 'auto' }}>
+                          <div className={`absolute top-0 left-0 w-full h-full z-10 ${panMode ? '' : 'touch-none'}`} style={{ pointerEvents: panMode ? 'none' : 'auto' }}>
                             <ReactSketchCanvas
                               ref={canvasRef}
                               style={{ border: 'none', background: 'transparent' }}
