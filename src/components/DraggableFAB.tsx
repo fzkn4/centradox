@@ -135,7 +135,7 @@ export function DraggableFAB() {
     <>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`fixed top-4 right-4 p-3 rounded-full shadow-lg transition-all duration-300 z-50 transform hover:scale-105 active:scale-95 ${
+        className={`fixed bottom-4 md:bottom-auto md:top-4 right-4 p-3 rounded-full shadow-lg transition-all duration-300 z-50 transform hover:scale-105 active:scale-95 ${
           unreadCount > 0
             ? 'bg-red-500 hover:bg-red-600 shadow-red-200'
             : 'bg-white hover:bg-gray-50 border border-gray-200'
@@ -151,7 +151,7 @@ export function DraggableFAB() {
       </button>
 
       {isOpen && (
-        <div ref={dropdownRef} className="fixed top-16 right-4 bg-white border border-gray-200 rounded-xl shadow-xl p-0 max-w-sm w-full max-h-96 overflow-hidden z-50">
+        <div ref={dropdownRef} className="fixed bottom-16 md:bottom-auto md:top-16 right-4 bg-white border border-gray-200 rounded-xl shadow-xl p-0 max-w-sm w-full max-h-96 flex flex-col overflow-hidden z-50">
           {/* Header */}
           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 border-b border-gray-100">
             <div className="flex items-center justify-between">
