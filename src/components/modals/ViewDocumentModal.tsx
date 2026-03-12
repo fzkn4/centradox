@@ -229,7 +229,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
       const url = window.URL.createObjectURL(blob)
       const a = window.document.createElement('a')
       a.href = url
-      const currentVersion = doc.versions[0]
+      const currentVersion = doc.versions.find((v: DocumentVersion) => v.id === doc.currentVersionId) || doc.versions[0]
       a.download = currentVersion?.fileName || `document-${documentId}`
       window.document.body.appendChild(a)
       a.click()
@@ -1136,7 +1136,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {doc.versions.map((version: DocumentVersion) => (
+                    {doc.versions.filter((v: DocumentVersion) => v.mimeType !== 'image/png').map((version: DocumentVersion) => (
                       <tr key={version.id} className={version.id === doc.currentVersionId ? 'bg-indigo-50' : ''}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-md ${
