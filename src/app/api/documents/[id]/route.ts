@@ -130,14 +130,16 @@ export async function GET(
                 assignedTo: {
                   select: {
                     id: true,
-                    name: true
+                    name: true,
+                    phoneNumber: true
                   }
                 },
                 completedBy: {
                   select: {
                     id: true,
                     name: true,
-                    role: true
+                    role: true,
+                    phoneNumber: true
                   }
                 }
               },

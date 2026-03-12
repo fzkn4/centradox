@@ -35,11 +35,13 @@ interface WorkflowStep {
   assignedTo: {
     id: string
     name: string
+    phoneNumber?: string | null
   } | null
   completedBy: {
     id: string
     name: string
     role: string
+    phoneNumber?: string | null
   } | null
   completedAt: string | null
   comment: string | null
@@ -68,6 +70,7 @@ interface DocumentData {
     id: string
     name: string
     role: string
+    phoneNumber?: string | null
   }
   departments: {
     department: {
@@ -815,7 +818,13 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                         <p className="text-xs text-gray-500 uppercase tracking-wide">Created By</p>
                       </div>
                       <p className="font-semibold text-gray-900">{doc.createdBy.name}</p>
-                      <p className="text-xs text-gray-500 capitalize">{doc.createdBy.role === 'DRAFTER' ? 'Drafter/Editor' : doc.createdBy.role.toLowerCase()}</p>
+                      <p className="text-xs text-gray-500 capitalize mb-1">{doc.createdBy.role === 'DRAFTER' ? 'Drafter/Editor' : doc.createdBy.role.toLowerCase()}</p>
+                      {doc.createdBy.phoneNumber && (
+                        <div className="flex items-center gap-1.5 mt-2 bg-gray-100 text-gray-600 px-2 py-1 rounded-md text-xs font-medium w-fit shadow-sm">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                          {doc.createdBy.phoneNumber}
+                        </div>
+                      )}
                     </div>
 
                     <div className="bg-gray-50 rounded-lg p-4">
@@ -965,15 +974,32 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                             </div>
                           )}
                         </div>
-                        <div className="flex items-center space-x-4 mt-1 text-sm text-gray-600">
-                          <p>
-                            {step.assignedTo
-                              ? `Assigned to: ${step.assignedTo.name}`
-                              : `All ${step.role === 'DRAFTER' ? 'Drafter/Editors' : step.role.toLowerCase() + 's'} in ${step.department?.name || 'General'}`
-                            }
-                          </p>
+                        <div className="flex flex-wrap items-center gap-4 mt-1 text-sm text-gray-600">
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {step.assignedTo ? (
+                              <>
+                                <span>Assigned to: {step.assignedTo.name}</span>
+                                {step.assignedTo.phoneNumber && (
+                                  <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded flex items-center gap-1 shadow-sm">
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                                    {step.assignedTo.phoneNumber}
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <span>All {step.role === 'DRAFTER' ? 'Drafter/Editors' : step.role.toLowerCase() + 's'} in {step.department?.name || 'General'}</span>
+                            )}
+                          </div>
                           {step.completedBy && (
-                            <p>Completed by: {step.completedBy.name} ({step.completedBy.role === 'DRAFTER' ? 'Drafter/Editor' : step.completedBy.role.toLowerCase()})</p>
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <span>Completed by: {step.completedBy.name} ({step.completedBy.role === 'DRAFTER' ? 'Drafter/Editor' : step.completedBy.role.toLowerCase()})</span>
+                              {step.completedBy.phoneNumber && (
+                                <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded flex items-center gap-1 shadow-sm">
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                                  {step.completedBy.phoneNumber}
+                                </span>
+                              )}
+                            </div>
                           )}
                           {step.completedAt && (
                             <p>Completed: {format(new Date(step.completedAt), 'MMM dd, yyyy HH:mm')}</p>
