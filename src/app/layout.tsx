@@ -24,7 +24,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <SocketProvider>
-          <Toaster position="bottom-right" theme="dark" options={{ fill: '#2b2b2b' }} />
+          <Toaster position="bottom-right" theme="light" />
           {children}
           <DraggableFAB />
         </SocketProvider>

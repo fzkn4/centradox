@@ -182,8 +182,8 @@ export default function DashboardPage() {
                 <InformationCircleIcon className="w-6 h-6 shrink-0 text-blue-500" />
                 <div className="flex flex-col gap-1 mt-0.5">
                   <span className="font-semibold text-base text-blue-500">New Document Created</span>
-                  <span className="text-sm text-gray-300">
-                    <span className="text-gray-100 font-medium">{data.title}</span> requires your attention.
+                  <span className="text-sm text-gray-600">
+                    <span className="text-gray-900 font-medium">{data.title}</span> requires your attention.
                   </span>
                 </div>
               </div>
@@ -204,7 +204,7 @@ export default function DashboardPage() {
                 <span className="font-semibold text-base text-green-500">
                   {data.isFinalStep ? 'Document Fully Approved' : 'Document Step Completed'}
                 </span>
-                <span className="text-sm text-gray-300">
+                <span className="text-sm text-gray-600">
                   {data.isFinalStep 
                     ? `"${data.title}" has successfully completed all approval steps.` 
                     : `An approver has signed off on "${data.title}".`}
@@ -225,7 +225,7 @@ export default function DashboardPage() {
               <XCircleIcon className="w-6 h-6 shrink-0 text-red-500" />
               <div className="flex flex-col gap-1 mt-0.5">
                 <span className="font-semibold text-base text-red-500">Document Disapproved</span>
-                <span className="text-sm text-gray-300">
+                <span className="text-sm text-gray-600">
                   "{data.title}" has been returned for revisions.
                 </span>
               </div>
