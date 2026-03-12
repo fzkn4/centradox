@@ -134,6 +134,8 @@ model WorkflowStep {
   status        WorkflowStepStatus @default(PENDING)
   completedAt   DateTime?
   comment       String?
+  confidentialComment String?
+  confidentialCommentVisibleTo String? // JSON string array of user IDs
   completedById String?
 
   workflowInstance  WorkflowInstance @relation(fields: [workflowInstanceId], references: [id], onDelete: Cascade)

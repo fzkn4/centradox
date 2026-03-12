@@ -56,6 +56,8 @@ export async function POST(
     const action = formData.get('action') as string
     const comment = formData.get('comment') as string
     const file = formData.get('file') as File | null
+    const confidentialComment = formData.get('confidentialComment') as string || null
+    const confidentialCommentVisibleToStr = formData.get('confidentialCommentVisibleTo') as string || null
 
     let versionId: string | null = null
     let versionNumber: number | null = null
@@ -238,7 +240,9 @@ export async function POST(
           status: 'COMPLETED',
           completedAt: new Date(),
           completedById: user.userId,
-          comment: finalComment
+          comment: finalComment,
+          confidentialComment: confidentialComment,
+          confidentialCommentVisibleTo: confidentialCommentVisibleToStr
         }
       })
 
@@ -374,6 +378,8 @@ export async function POST(
           status: 'COMPLETED',
           completedAt: new Date(),
           comment: finalComment,
+          confidentialComment: confidentialComment,
+          confidentialCommentVisibleTo: confidentialCommentVisibleToStr,
           completedById: user.userId
         }
       })

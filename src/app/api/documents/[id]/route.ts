@@ -150,6 +150,32 @@ export async function GET(
       return NextResponse.json({ error: 'Document not found' }, { status: 404 })
     }
 
+    if (user.role !== 'ADMIN') {
+      document.workflowInstances.forEach((instance: any) => {
+        instance.steps.forEach((step: any) => {
+          if (step.confidentialComment) {
+            let canView = false;
+            if (step.completedById === user.userId) {
+              canView = true;
+            } else if (step.confidentialCommentVisibleTo) {
+              try {
+                const visibleTo = JSON.parse(step.confidentialCommentVisibleTo);
+                if (Array.isArray(visibleTo) && visibleTo.includes(user.userId)) {
+                  canView = true;
+                }
+              } catch (e) {
+                // ignore parsing error
+              }
+            }
+            if (!canView) {
+              step.confidentialComment = null;
+              step.confidentialCommentVisibleTo = null;
+            }
+          }
+        });
+      });
+    }
+
     return NextResponse.json({ document })
   } catch (error) {
     console.error('Get document error:', error)

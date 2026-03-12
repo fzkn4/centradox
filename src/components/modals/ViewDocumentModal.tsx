@@ -42,6 +42,8 @@ interface WorkflowStep {
   } | null
   completedAt: string | null
   comment: string | null
+  confidentialComment?: string | null
+  confidentialCommentVisibleTo?: string | null
 }
 
 interface WorkflowInstance {
@@ -144,6 +146,10 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
   }, [previewUrl, previewType, activeTab])
 
   const [completeComment, setCompleteComment] = useState('')
+  const [isConfidentialComment, setIsConfidentialComment] = useState(false)
+  const [confidentialComment, setConfidentialComment] = useState('')
+  const [confidentialCommentVisibleTo, setConfidentialCommentVisibleTo] = useState<string[]>([])
+  
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [dragActive, setDragActive] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -397,6 +403,12 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
       const formData = new FormData()
       formData.append('action', actionType)
       formData.append('comment', completeComment)
+      if (isConfidentialComment && confidentialComment.trim() !== '') {
+        formData.append('confidentialComment', confidentialComment)
+        if (confidentialCommentVisibleTo.length > 0) {
+          formData.append('confidentialCommentVisibleTo', JSON.stringify(confidentialCommentVisibleTo))
+        }
+      }
       if (uploadFile) {
         formData.append('file', uploadFile)
       }
@@ -419,6 +431,9 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
       await loadDocument()
       setActiveTab('workflow')
       setCompleteComment('')
+      setIsConfidentialComment(false)
+      setConfidentialComment('')
+      setConfidentialCommentVisibleTo([])
       setUploadFile(null)
       sileo.success({ title: actionType === 'disapprove-step' ? 'Document disapproved' : 'Step completed successfully' })
     } catch (err: any) {
@@ -578,6 +593,15 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
   const showDisapproveOption = currentWorkflowStep?.role === 'APPROVER'
 
   const isDocumentComplete = doc?.currentStatus === 'APPROVED' || doc?.currentStatus === 'FINAL'
+
+  const uniquePersonnel = Array.from(new Map(
+    doc?.workflowInstances.flatMap(wi => wi.steps.flatMap(step => {
+      const users = []
+      if (step.assignedTo) users.push(step.assignedTo)
+      if (step.completedBy) users.push(step.completedBy)
+      return users
+    })).concat(doc?.createdBy ? [{ id: doc.createdBy.id, name: doc.createdBy.name }] : []).map(u => [u.id, u])
+  ).values())
 
   if (!isOpen) return null
 
@@ -954,6 +978,22 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                             "{renderCommentWithLinks(step.comment.startsWith('[DISAPPROVED]') ? step.comment.replace('[DISAPPROVED]', '').trim() : step.comment)}"
                           </p>
                         )}
+                        {step.confidentialComment && (
+                          <div className="mt-3 p-3 rounded-lg border bg-yellow-50 border-yellow-200 text-yellow-800 shadow-sm relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-16 h-16 transform translate-x-8 -translate-y-8 bg-yellow-200 rounded-full opacity-50"></div>
+                            <div className="relative z-10">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <svg className="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                </svg>
+                                <span className="text-xs font-bold uppercase tracking-wider text-yellow-700">Confidential Comment</span>
+                              </div>
+                              <p className="text-sm italic whitespace-pre-wrap">
+                                "{renderCommentWithLinks(step.confidentialComment)}"
+                              </p>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1297,6 +1337,67 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                     {completeComment.length > 0 && completeComment.length < 450 && 'Keep your comment concise and relevant'}
                     {completeComment.length > 450 && completeComment.length <= 500 && `You're close to the character limit (${500 - completeComment.length} remaining)`}
                   </p>
+                </div>
+
+                <div className="pt-4 border-t border-gray-100">
+                  <div className="flex items-center mb-4">
+                    <button
+                      type="button"
+                      onClick={() => setIsConfidentialComment(!isConfidentialComment)}
+                      className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 ${isConfidentialComment ? 'bg-indigo-600' : 'bg-gray-200'}`}
+                    >
+                      <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isConfidentialComment ? 'translate-x-4' : 'translate-x-0'}`} />
+                    </button>
+                    <span className="ml-3 text-sm font-medium text-gray-900">Add Confidential Comment</span>
+                  </div>
+
+                  {isConfidentialComment && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 space-y-4">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <svg className="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                        <label className="block text-sm font-medium text-yellow-800">
+                          Confidential Comment Details
+                        </label>
+                      </div>
+                      <textarea
+                        value={confidentialComment}
+                        onChange={(e) => setConfidentialComment(e.target.value)}
+                        rows={3}
+                        className="block w-full sm:text-sm rounded-lg border-yellow-300 focus:border-yellow-500 focus:ring-yellow-500 shadow-sm p-3 bg-white text-gray-900 placeholder:text-gray-500"
+                        placeholder="These details will only be visible to selected personnel..."
+                      />
+                      
+                      <div>
+                        <label className="block text-xs font-medium text-yellow-800 mb-1">
+                          Visible To (Select personnel)
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2 bg-white border border-yellow-200 rounded-md">
+                          {uniquePersonnel.map((person: any) => (
+                            <label key={person.id} className="flex items-center space-x-2 text-sm text-gray-700 p-1 hover:bg-yellow-100 rounded cursor-pointer">
+                              <input
+                                type="checkbox"
+                                className="rounded text-indigo-600 focus:ring-indigo-500"
+                                checked={confidentialCommentVisibleTo.includes(person.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setConfidentialCommentVisibleTo([...confidentialCommentVisibleTo, person.id])
+                                  } else {
+                                    setConfidentialCommentVisibleTo(confidentialCommentVisibleTo.filter(id => id !== person.id))
+                                  }
+                                }}
+                              />
+                              <span>{person.name}</span>
+                            </label>
+                          ))}
+                          {uniquePersonnel.length === 0 && (
+                            <span className="text-xs text-gray-400 italic">No personnel found</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {submitError && (
