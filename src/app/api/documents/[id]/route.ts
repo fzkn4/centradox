@@ -117,7 +117,14 @@ export async function GET(
                 department: {
                   select: {
                     id: true,
-                    name: true
+                    name: true,
+                    users: {
+                      select: {
+                        id: true,
+                        name: true,
+                        role: true
+                      }
+                    }
                   }
                 },
                 assignedTo: {

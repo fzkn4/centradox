@@ -28,6 +28,7 @@ interface WorkflowStep {
   department: {
     id: string
     name: string
+    users?: { id: string; name: string; role: string }[]
   } | null
   role: string
   status: string
@@ -596,11 +597,16 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
 
   const uniquePersonnel = Array.from(new Map(
     doc?.workflowInstances.flatMap(wi => wi.steps.flatMap(step => {
-      const users = []
+      const users: any[] = []
       if (step.assignedTo) users.push(step.assignedTo)
       if (step.completedBy) users.push(step.completedBy)
+      if (step.department?.users) {
+        step.department.users.forEach((u: any) => {
+          users.push({ id: u.id, name: `${u.name} (${step.department?.name || ''})` })
+        })
+      }
       return users
-    })).concat(doc?.createdBy ? [{ id: doc.createdBy.id, name: doc.createdBy.name }] : []).map(u => [u.id, u])
+    })).concat(doc?.createdBy ? [{ id: doc.createdBy.id, name: `${doc.createdBy.name} (Author)` }] : []).map(u => [u.id, u])
   ).values())
 
   if (!isOpen) return null
