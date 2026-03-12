@@ -619,17 +619,17 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
       className="fixed inset-0 backdrop-blur-sm overflow-y-auto h-full w-full z-50"
       onClick={onClose}
     >
-      <div className={`relative top-10 mx-auto p-5 border w-11/12 ${activeTab === 'preview' ? 'max-w-7xl' : 'max-w-5xl'} shadow-xl rounded-xl bg-white mb-20`} onClick={(e) => e.stopPropagation()}>
-          <div className="flex justify-between items-start mb-6">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">Document Details</h2>
+      <div className={`relative top-4 md:top-10 mx-auto p-4 md:p-5 border w-[96%] sm:w-11/12 ${activeTab === 'preview' ? 'max-w-7xl' : 'max-w-5xl'} shadow-xl rounded-xl bg-white mb-20`} onClick={(e) => e.stopPropagation()}>
+          <div className="flex flex-col sm:flex-row justify-between items-start mb-4 md:mb-6 gap-3">
+            <div className="pr-8 sm:pr-0">
+              <h2 className="text-xl md:text-2xl font-bold text-gray-900 leading-tight">Document Details</h2>
               {doc && (
-                <p className="text-sm text-gray-500 mt-1">{doc.title}</p>
+                <p className="text-sm text-gray-500 mt-1 line-clamp-2">{doc.title}</p>
               )}
             </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-md transition-colors"
+              className="absolute top-4 right-4 sm:relative sm:top-auto sm:right-auto text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-md transition-colors"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -646,12 +646,12 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
             {error}
           </div>
         ) : doc ? (
-          <div className="space-y-6">
+          <div className="space-y-4 md:space-y-6">
             <div className="border-b border-gray-200">
-              <nav className="flex space-x-8 -mb-px">
+              <nav className="flex overflow-x-auto space-x-4 md:space-x-8 -mb-px pb-1 scrollbar-hide">
                 <button
                   onClick={() => setActiveTab('details')}
-                  className={`py-2 px-1 text-sm font-medium border-b-2 transition-colors ${
+                  className={`whitespace-nowrap py-2 px-1 text-sm font-medium border-b-2 transition-colors ${
                     activeTab === 'details'
                       ? 'border-indigo-500 text-indigo-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -718,20 +718,20 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
             </div>
 
             {activeTab === 'details' && (
-              <div className="space-y-6">
-                <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl p-6 text-white">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="text-2xl font-bold mb-2">{doc.title}</h3>
-                      <p className="text-indigo-100 text-sm">
-                        <span className="inline-flex items-center">
+              <div className="space-y-4 md:space-y-6">
+                <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl p-4 md:p-6 text-white">
+                  <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+                    <div className="w-full sm:w-auto">
+                      <h3 className="text-xl md:text-2xl font-bold mb-2 break-words">{doc.title}</h3>
+                      <p className="text-indigo-100 text-sm flex flex-wrap gap-2 items-center">
+                        <span className="inline-flex items-center whitespace-nowrap">
                           <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                           </svg>
                           {doc.type}
                         </span>
-                        <span className="mx-3">•</span>
-                        <span className="inline-flex items-center">
+                        <span className="hidden sm:inline mx-1">•</span>
+                        <span className="inline-flex items-center whitespace-nowrap">
                           <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
@@ -739,7 +739,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                         </span>
                       </p>
                     </div>
-                    <span className={`inline-flex px-4 py-2 text-sm font-bold rounded-full shadow-lg ${getStatusColor(doc.currentStatus)}`}>
+                    <span className={`inline-flex whitespace-nowrap px-3 py-1.5 md:px-4 md:py-2 flex-shrink-0 text-xs md:text-sm font-bold rounded-full shadow-lg ${getStatusColor(doc.currentStatus)}`}>
                       {getStatusLabel(doc.currentStatus)}
                     </span>
                   </div>
@@ -860,23 +860,23 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                 </div>
 
                 {doc.referenceFilePath && (
-                  <div className="border-t border-gray-200 pt-6">
-                    <h4 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">Reference Document</h4>
-                    <div className="bg-white border border-gray-200 rounded-lg p-4 flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
-                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="border-t border-gray-200 pt-4 md:pt-6">
+                    <h4 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-3 md:mb-4">Reference Document</h4>
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 md:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center space-x-3 md:space-x-4">
+                        <div className="p-2 md:p-3 bg-indigo-50 text-indigo-600 rounded-lg flex-shrink-0">
+                          <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                           </svg>
                         </div>
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">{doc.referenceFileName}</p>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 truncate">{doc.referenceFileName}</p>
                           <p className="text-xs text-gray-500">{doc.referenceFileSize ? formatFileSize(doc.referenceFileSize) : 'Unknown size'}</p>
                         </div>
                       </div>
                       <button
                         onClick={handleDownloadReference}
-                        className="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        className="w-full sm:w-auto px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 shadow-sm"
                       >
                         Download
                       </button>
@@ -884,11 +884,11 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                   </div>
                 )}
 
-                <div className="flex justify-end pt-4 border-t border-gray-200 space-x-3">
+                <div className="flex flex-col sm:flex-row justify-end pt-4 border-t border-gray-200 gap-3 sm:gap-0 sm:space-x-3">
                   {canCompleteStep && !isDocumentComplete && (
                     <button
                       onClick={() => setActiveTab('complete')}
-                      className="inline-flex items-center px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all font-medium shadow-lg hover:shadow-xl"
+                      className="inline-flex w-full sm:w-auto justify-center items-center px-4 md:px-6 py-2 md:py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all font-medium shadow-lg hover:shadow-xl"
                     >
                       <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -900,7 +900,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                     <>
                       <button
                         onClick={() => handlePreview()}
-                        className="inline-flex items-center px-6 py-3 bg-white text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-all font-medium shadow hover:shadow-md"
+                        className="inline-flex w-full sm:w-auto justify-center items-center px-4 md:px-6 py-2 md:py-3 bg-white text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-all font-medium shadow hover:shadow-md"
                       >
                         <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -910,9 +910,9 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                       </button>
                       <button
                         onClick={handleDownloadCurrent}
-                        className="inline-flex items-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all font-medium shadow-lg hover:shadow-xl"
+                        className="inline-flex w-full sm:w-auto justify-center items-center px-4 md:px-6 py-2 md:py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all font-medium shadow-lg hover:shadow-xl"
                       >
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-5 h-5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                         </svg>
                         Download Current Version
@@ -923,7 +923,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                     <button
                       onClick={handleDeleteDocument}
                       disabled={isDeleting}
-                      className="inline-flex items-center px-6 py-3 bg-red-60 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all font-medium shadow-lg hover:shadow-xl disabled:opacity-50"
+                      className="inline-flex w-full sm:w-auto justify-center items-center px-4 md:px-6 py-2 md:py-3 bg-red-60 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all font-medium shadow-lg hover:shadow-xl disabled:opacity-50"
                     >
                       {isDeleting ? (
                         <svg className="animate-spin h-5 w-5 mr-2 text-red-600" fill="none" viewBox="0 0 24 24">
@@ -931,7 +931,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
                       ) : (
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-5 h-5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                       )}
@@ -944,14 +944,14 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
 
             {activeTab === 'workflow' && doc.workflowInstances.length > 0 && (
               <div className="space-y-4">
-                <div className="bg-gray-50 rounded-lg p-4">
+                <div className="bg-gray-50 rounded-lg p-3 md:p-4">
                   {doc.workflowInstances[0].steps.map((step: WorkflowStep) => (
-                    <div key={step.id} className={`flex items-start space-x-4 py-4 ${step.stepOrder < doc.workflowInstances[0].currentStep ? 'opacity-60' : ''}`}>
-                      <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold ${getStepStatusColor(step.status, step.comment?.startsWith('[DISAPPROVED]'))} ${step.stepOrder === doc.workflowInstances[0].currentStep ? 'ring-2 ring-indigo-500 ring-offset-2' : ''}`}>
+                    <div key={step.id} className={`flex items-start space-x-3 md:space-x-4 py-4 ${step.stepOrder < doc.workflowInstances[0].currentStep ? 'opacity-60' : ''}`}>
+                      <div className={`flex-shrink-0 w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-xs md:text-sm font-semibold ${getStepStatusColor(step.status, step.comment?.startsWith('[DISAPPROVED]'))} ${step.stepOrder === doc.workflowInstances[0].currentStep ? 'ring-2 ring-indigo-500 ring-offset-2' : ''}`}>
                         {step.stepOrder}
                       </div>
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
                           <p className="text-sm font-semibold text-gray-900">
                             {step.department?.name || 'General'} - {step.role === 'DRAFTER' ? 'Drafter/Editor' : step.role.toLowerCase()}
                           </p>
@@ -959,7 +959,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                             {step.comment?.startsWith('[DISAPPROVED]') ? 'disapproved' : step.status.replace('_', ' ').toLowerCase()}
                           </span>
                           {step.stepOrder === doc.workflowInstances[0].currentStep && (
-                            <div className="flex items-center space-x-2">
+                            <div className="flex items-center gap-2 ml-auto sm:ml-0">
                               <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700">
                                 Current
                               </span>
@@ -1183,7 +1183,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
             )}
 
             {activeTab === 'versions' && (
-              <div className="bg-gray-50 rounded-lg overflow-hidden">
+              <div className="bg-gray-50 rounded-lg overflow-x-auto overflow-y-hidden shadow-inner">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-100">
                     <tr>
