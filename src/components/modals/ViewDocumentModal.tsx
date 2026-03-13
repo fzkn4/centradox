@@ -7,7 +7,7 @@ import { format } from 'date-fns'
 import { sileo } from 'sileo'
 import { renderAsync } from 'docx-preview'
 import { ReactSketchCanvas, ReactSketchCanvasRef } from 'react-sketch-canvas'
-import html2canvas from 'html2canvas'
+import { toPng } from 'html-to-image'
 import { v4 as uuidv4 } from 'uuid'
 import { Pen, Eraser, Hand, Type } from 'lucide-react'
 
@@ -477,14 +477,10 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
     try {
       setSubmitting(true)
       
-      const canvasElement = await html2canvas(wrapperRef.current, {
-        scale: 2, // For better resolution/text clarity
+      const dataUri = await toPng(wrapperRef.current, {
+        pixelRatio: 2, // For better resolution/text clarity
         backgroundColor: '#ffffff', // Explicitly set background so it isn't transparent
-        useCORS: true, 
-        logging: false
       })
-      
-      const dataUri = canvasElement.toDataURL('image/png')
       
       // convert base64 to Blob
       const byteString = atob(dataUri.split(',')[1])
