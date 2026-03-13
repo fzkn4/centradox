@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useAuthStore } from '@/lib/store'
 import { getStatusColor, getStatusLabel, getComplianceTypeLabel } from '@/lib/permissions'
 import { format } from 'date-fns'
@@ -126,6 +126,16 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
   const [strokeColor, setStrokeColor] = useState('#ef4444') // Default red
   const [strokeWidth, setStrokeWidth] = useState(4)
   const canvasRef = useRef<ReactSketchCanvasRef>(null)
+
+  // Dynamic circle cursor for draw/erase tools — scales with strokeWidth
+  const circleCursor = useMemo(() => {
+    const size = Math.max(8, (activeTool === 'erase' ? strokeWidth * 2 : strokeWidth) * 2 + 4)
+    const radius = (size - 4) / 2
+    const center = size / 2
+    const color = activeTool === 'erase' ? '%23888888' : strokeColor.replace('#', '%23')
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}'><circle cx='${center}' cy='${center}' r='${radius}' fill='none' stroke='${color}' stroke-width='1.5'/><circle cx='${center}' cy='${center}' r='1' fill='${color}'/></svg>`
+    return `url("data:image/svg+xml,${svg}") ${center} ${center}, crosshair`
+  }, [strokeWidth, strokeColor, activeTool])
 
   // Textbox states
   const [zoomLevel, setZoomLevel] = useState(1)
@@ -1316,7 +1326,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                     <div style={{ position: 'relative', width: '100%', height: '100%', border: '1px solid #ddd', backgroundColor: '#f3f4f6', overflowY: 'auto', overflowX: 'auto' }}>
                       <div 
                         ref={wrapperRef} 
-                        style={{ position: 'relative', minWidth: '100%', minHeight: '100%', width: 'fit-content', transform: `scale(${zoomLevel})`, transformOrigin: 'top left' }}
+                        style={{ position: 'relative', minWidth: '100%', minHeight: '100%', width: 'fit-content', transform: `scale(${zoomLevel})`, transformOrigin: 'top left', cursor: isAnnotating ? (activeTool === 'draw' || activeTool === 'erase' ? circleCursor : activeTool === 'pan' ? 'grab' : activeTool === 'text' ? 'text' : 'default') : 'default' }}
                         onMouseDown={handleWrapperMouseDown}
                         onMouseMove={handleWrapperMouseMove}
                         onMouseUp={endDrag}
@@ -1327,7 +1337,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                         <div ref={docxContainerRef} className="docx-preview-container select-none" />
                         {isAnnotating && (
                           <>
-                            <div className={`absolute top-0 left-0 w-full h-full z-10 ${activeTool === 'pan' ? '' : 'touch-none'}`} style={{ pointerEvents: (activeTool === 'pan' || activeTool === 'text') ? 'none' : 'auto' }}>
+                            <div className={`absolute top-0 left-0 w-full h-full z-10 ${activeTool === 'pan' ? '' : 'touch-none'}`} style={{ pointerEvents: (activeTool === 'pan' || activeTool === 'text') ? 'none' : 'auto', cursor: activeTool === 'draw' || activeTool === 'erase' ? circleCursor : 'default' }}>
                               <ReactSketchCanvas
                                 ref={canvasRef}
                                 style={{ border: 'none', background: 'transparent' }}
