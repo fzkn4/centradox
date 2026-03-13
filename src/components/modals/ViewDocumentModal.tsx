@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useAuthStore } from '@/lib/store'
 import { getStatusColor, getStatusLabel, getComplianceTypeLabel } from '@/lib/permissions'
 import { format } from 'date-fns'
@@ -8,6 +8,18 @@ import { sileo } from 'sileo'
 import { renderAsync } from 'docx-preview'
 import { ReactSketchCanvas, ReactSketchCanvasRef } from 'react-sketch-canvas'
 import html2canvas from 'html2canvas'
+import { v4 as uuidv4 } from 'uuid'
+import { Pen, Eraser, Hand, Type } from 'lucide-react'
+
+interface Textbox {
+  id: string
+  x: number
+  y: number
+  text: string
+  color: string
+  fontSize: number
+  isEditing: boolean
+}
 
 interface DocumentVersion {
   id: string
@@ -109,11 +121,139 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
 
   // Annotation states
   const [isAnnotating, setIsAnnotating] = useState(false)
-  const [eraserMode, setEraserMode] = useState(false)
-  const [panMode, setPanMode] = useState(false)
+  type AnnotationTool = 'draw' | 'erase' | 'pan' | 'text'
+  const [activeTool, setActiveTool] = useState<AnnotationTool>('draw')
   const [strokeColor, setStrokeColor] = useState('#ef4444') // Default red
   const [strokeWidth, setStrokeWidth] = useState(4)
   const canvasRef = useRef<ReactSketchCanvasRef>(null)
+
+  // Textbox states
+  const [zoomLevel, setZoomLevel] = useState(1)
+  const [textboxes, setTextboxes] = useState<Textbox[]>([])
+  const [selectedTextboxId, setSelectedTextboxId] = useState<string | null>(null)
+  // Use refs for drag state to avoid re-render lag during rapid mouse movements
+  const isDraggingRef = useRef(false)
+  const dragOffsetRef = useRef({ x: 0, y: 0 })
+  const dragTargetIdRef = useRef<string | null>(null)
+  const rafIdRef = useRef<number | null>(null)
+  const [isDraggingState, setIsDraggingState] = useState(false) // Only for cursor styling
+
+  const handleWrapperClick = useCallback((e: React.MouseEvent) => {
+    if (activeTool !== 'text' || !wrapperRef.current || isDraggingRef.current) return
+    
+    // Check if we clicked an existing textbox to avoid creating a new one
+    if ((e.target as HTMLElement).closest('.annotation-textbox')) return
+
+    const rect = wrapperRef.current.getBoundingClientRect()
+    const x = (e.clientX - rect.left) / zoomLevel
+    const y = (e.clientY - rect.top) / zoomLevel
+
+    const newTextbox: Textbox = {
+      id: uuidv4(),
+      x,
+      y,
+      text: 'Type here...',
+      color: strokeColor,
+      fontSize: Math.max(12, strokeWidth * 4),
+      isEditing: true
+    }
+
+    setTextboxes(prev => [...prev, newTextbox])
+    setSelectedTextboxId(newTextbox.id)
+  }, [activeTool, zoomLevel, strokeColor, strokeWidth])
+
+  const startDrag = useCallback((clientX: number, clientY: number, id: string, currentTarget: HTMLElement) => {
+    const textbox = textboxes.find(t => t.id === id)
+    if (!textbox || textbox.isEditing) return
+    if (activeTool === 'text') return
+
+    isDraggingRef.current = true
+    dragTargetIdRef.current = id
+    setIsDraggingState(true)
+    setSelectedTextboxId(id)
+
+    const rect = currentTarget.getBoundingClientRect()
+    dragOffsetRef.current = {
+      x: (clientX - rect.left) / zoomLevel,
+      y: (clientY - rect.top) / zoomLevel
+    }
+  }, [textboxes, activeTool, zoomLevel])
+
+  const handleTextboxMouseDown = useCallback((e: React.MouseEvent, id: string) => {
+    e.preventDefault()
+    startDrag(e.clientX, e.clientY, id, e.currentTarget as HTMLElement)
+  }, [startDrag])
+
+  const handleTextboxTouchStart = useCallback((e: React.TouchEvent, id: string) => {
+    if (e.touches.length !== 1) return
+    const touch = e.touches[0]
+    startDrag(touch.clientX, touch.clientY, id, e.currentTarget as HTMLElement)
+  }, [startDrag])
+
+  const moveDrag = useCallback((clientX: number, clientY: number) => {
+    if (!isDraggingRef.current || !dragTargetIdRef.current || !wrapperRef.current) return
+
+    const targetId = dragTargetIdRef.current
+    const offset = dragOffsetRef.current
+    const rect = wrapperRef.current.getBoundingClientRect()
+    const x = (clientX - rect.left) / zoomLevel - offset.x
+    const y = (clientY - rect.top) / zoomLevel - offset.y
+
+    // Throttle updates with requestAnimationFrame
+    if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current)
+    rafIdRef.current = requestAnimationFrame(() => {
+      setTextboxes(prev => prev.map(t =>
+        t.id === targetId ? { ...t, x, y } : t
+      ))
+      rafIdRef.current = null
+    })
+  }, [zoomLevel])
+
+  const handleWrapperMouseMove = useCallback((e: React.MouseEvent) => {
+    moveDrag(e.clientX, e.clientY)
+  }, [moveDrag])
+
+  const handleWrapperTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return
+    const touch = e.touches[0]
+    moveDrag(touch.clientX, touch.clientY)
+  }, [moveDrag])
+
+  const endDrag = useCallback(() => {
+    isDraggingRef.current = false
+    dragTargetIdRef.current = null
+    setIsDraggingState(false)
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current)
+      rafIdRef.current = null
+    }
+  }, [])
+
+  // Deselect textbox when clicking empty wrapper area (not on a textbox)
+  const handleWrapperMouseDown = useCallback((e: React.MouseEvent) => {
+    if (activeTool === 'text') return
+    if (!(e.target as HTMLElement).closest('.annotation-textbox')) {
+      setSelectedTextboxId(null)
+    }
+  }, [activeTool])
+
+  const updateTextbox = useCallback((id: string, updates: Partial<Textbox>) => {
+    setTextboxes(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t))
+  }, [])
+
+  const removeTextbox = useCallback((id: string) => {
+    setTextboxes(prev => prev.filter(t => t.id !== id))
+    setSelectedTextboxId(prev => prev === id ? null : prev)
+  }, [])
+
+  // Handle textarea blur — keep editing if focus moved to toolbar within same textbox
+  const handleTextareaBlur = useCallback((e: React.FocusEvent, id: string) => {
+    const relatedTarget = e.relatedTarget as HTMLElement | null
+    if (relatedTarget && (e.currentTarget as HTMLElement).closest('.annotation-textbox')?.contains(relatedTarget)) {
+      return // Focus moved within the same textbox container (e.g. toolbar button)
+    }
+    updateTextbox(id, { isEditing: false })
+  }, [updateTextbox])
 
   useEffect(() => {
     const renderDocx = async () => {
@@ -154,7 +294,6 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
   const [isConfidentialComment, setIsConfidentialComment] = useState(false)
   const [confidentialComment, setConfidentialComment] = useState('')
   const [confidentialCommentVisibleTo, setConfidentialCommentVisibleTo] = useState<string[]>([])
-  const [zoomLevel, setZoomLevel] = useState(1)
   
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -350,6 +489,8 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
       
       setUploadFile(file)
       setIsAnnotating(false)
+      setTextboxes([])
+      setSelectedTextboxId(null)
       setActiveTab('complete')
       sileo.success({ title: 'Annotation captured! Add a comment and hit Take Action to submit.' })
     } catch (e) {
@@ -1062,8 +1203,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                           const newState = !isAnnotating;
                           setIsAnnotating(newState);
                           if (!newState) {
-                            setPanMode(false);
-                            setEraserMode(false);
+                            setActiveTool('draw');
                             setZoomLevel(1);
                           }
                         }}
@@ -1085,34 +1225,35 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                 {isAnnotating && (
                   <div className="bg-indigo-50 border-b border-indigo-100 p-2 flex flex-col md:flex-row items-center justify-between gap-3">
                     <div className="flex flex-wrap items-center gap-4">
-                      <div className="flex items-center space-x-2">
+                      <div className="flex bg-indigo-50 p-1 rounded-lg border border-indigo-100 shadow-sm">
                         <button
-                          onClick={() => { setPanMode(false); setEraserMode(false); canvasRef.current?.eraseMode(false) }}
-                          className={`p-2 rounded ${!panMode && !eraserMode ? 'bg-indigo-200 text-indigo-800' : 'text-gray-600 hover:bg-indigo-100'}`}
+                          onClick={() => { setActiveTool('draw'); canvasRef.current?.eraseMode(false) }}
+                          className={`p-2 rounded ${activeTool === 'draw' ? 'bg-indigo-200 text-indigo-800' : 'text-gray-600 hover:bg-indigo-100'}`}
                           title="Draw"
                         >
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                          </svg>
+                          <Pen className="w-5 h-5" />
                         </button>
                         <button
-                          onClick={() => { setPanMode(false); setEraserMode(true); canvasRef.current?.eraseMode(true) }}
-                          className={`p-2 rounded ${!panMode && eraserMode ? 'bg-indigo-200 text-indigo-800' : 'text-gray-600 hover:bg-indigo-100'}`}
+                          onClick={() => { setActiveTool('erase'); canvasRef.current?.eraseMode(true) }}
+                          className={`p-2 rounded ${activeTool === 'erase' ? 'bg-indigo-200 text-indigo-800' : 'text-gray-600 hover:bg-indigo-100'}`}
                           title="Erase"
                         >
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
+                          <Eraser className="w-5 h-5" />
                         </button>
                         <div className="h-6 w-px bg-indigo-200 mx-1"></div>
                         <button
-                          onClick={() => { setPanMode(true) }}
-                          className={`p-2 rounded flex items-center space-x-1 ${panMode ? 'bg-indigo-200 text-indigo-800' : 'text-gray-600 hover:bg-indigo-100'}`}
+                          onClick={() => { setActiveTool('pan'); canvasRef.current?.eraseMode(false) }}
+                          className={`p-2 rounded flex items-center space-x-1 ${activeTool === 'pan' ? 'bg-indigo-200 text-indigo-800' : 'text-gray-600 hover:bg-indigo-100'}`}
                           title="Pan/Scroll"
                         >
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11V7a5 5 0 0110 0v4m-5 8v-8m0 0l-3 3m3-3l3 3" />
-                          </svg>
+                          <Hand className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => { setActiveTool('text'); canvasRef.current?.eraseMode(false) }}
+                          className={`p-2 rounded ${activeTool === 'text' ? 'bg-indigo-200 text-indigo-800' : 'text-gray-600 hover:bg-indigo-100'}`}
+                          title="Text"
+                        >
+                          <Type className="w-5 h-5" />
                         </button>
                       </div>
                       
@@ -1125,7 +1266,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                           value={strokeColor} 
                           onChange={(e) => setStrokeColor(e.target.value)}
                           className="w-8 h-8 rounded cursor-pointer border-0 p-0"
-                          disabled={eraserMode}
+                          disabled={activeTool === 'erase'}
                         />
                       </div>
                       
@@ -1173,19 +1314,103 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                     </object>
                   ) : previewType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ? (
                     <div style={{ position: 'relative', width: '100%', height: '100%', border: '1px solid #ddd', backgroundColor: '#f3f4f6', overflowY: 'auto', overflowX: 'auto' }}>
-                      <div ref={wrapperRef} style={{ position: 'relative', minWidth: '100%', minHeight: '100%', width: 'fit-content', transform: `scale(${zoomLevel})`, transformOrigin: 'top left' }}>
+                      <div 
+                        ref={wrapperRef} 
+                        style={{ position: 'relative', minWidth: '100%', minHeight: '100%', width: 'fit-content', transform: `scale(${zoomLevel})`, transformOrigin: 'top left' }}
+                        onMouseDown={handleWrapperMouseDown}
+                        onMouseMove={handleWrapperMouseMove}
+                        onMouseUp={endDrag}
+                        onTouchMove={handleWrapperTouchMove}
+                        onTouchEnd={endDrag}
+                        onClick={handleWrapperClick}
+                      >
                         <div ref={docxContainerRef} className="docx-preview-container select-none" />
                         {isAnnotating && (
-                          <div className={`absolute top-0 left-0 w-full h-full z-10 ${panMode ? '' : 'touch-none'}`} style={{ pointerEvents: panMode ? 'none' : 'auto' }}>
-                            <ReactSketchCanvas
-                              ref={canvasRef}
-                              style={{ border: 'none', background: 'transparent' }}
-                              strokeWidth={strokeWidth}
-                              strokeColor={strokeColor}
-                              eraserWidth={strokeWidth * 2}
-                              canvasColor="transparent"
-                            />
-                          </div>
+                          <>
+                            <div className={`absolute top-0 left-0 w-full h-full z-10 ${activeTool === 'pan' ? '' : 'touch-none'}`} style={{ pointerEvents: (activeTool === 'pan' || activeTool === 'text') ? 'none' : 'auto' }}>
+                              <ReactSketchCanvas
+                                ref={canvasRef}
+                                style={{ border: 'none', background: 'transparent' }}
+                                strokeWidth={strokeWidth}
+                                strokeColor={strokeColor}
+                                eraserWidth={strokeWidth * 2}
+                                canvasColor="transparent"
+                              />
+                            </div>
+                            
+                            {/* Textbox Overlay */}
+                            <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-20">
+                              {textboxes.map((tb) => (
+                                <div
+                                  key={tb.id}
+                                  className={`annotation-textbox absolute pointer-events-auto group ${selectedTextboxId === tb.id ? 'ring-2 ring-indigo-500' : ''}`}
+                                  style={{ 
+                                    left: `${tb.x}px`, 
+                                    top: `${tb.y}px`,
+                                    cursor: activeTool === 'text' ? 'text' : isDraggingState && selectedTextboxId === tb.id ? 'grabbing' : 'grab',
+                                    touchAction: 'none'
+                                  }}
+                                  onMouseDown={(e) => handleTextboxMouseDown(e, tb.id)}
+                                  onTouchStart={(e) => handleTextboxTouchStart(e, tb.id)}
+                                >
+                                  {tb.isEditing ? (
+                                    <div className="relative">
+                                      <textarea
+                                        autoFocus
+                                        value={tb.text}
+                                        onChange={(e) => updateTextbox(tb.id, { text: e.target.value })}
+                                        onBlur={(e) => handleTextareaBlur(e, tb.id)}
+                                        className="bg-white/80 border border-indigo-300 rounded p-1 shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                                        style={{ 
+                                          color: tb.color, 
+                                          fontSize: `${tb.fontSize}px`,
+                                          minWidth: '100px',
+                                          minHeight: '40px'
+                                        }}
+                                      />
+                                      <div className="absolute -top-8 left-0 flex items-center bg-white border border-indigo-200 rounded shadow-sm p-1 gap-1">
+                                        <button 
+                                          onClick={() => updateTextbox(tb.id, { fontSize: Math.max(8, tb.fontSize - 2) })}
+                                          className="p-1 hover:bg-gray-100 rounded text-xs"
+                                        >-</button>
+                                        <span className="text-[10px] w-6 text-center">{tb.fontSize}px</span>
+                                        <button 
+                                          onClick={() => updateTextbox(tb.id, { fontSize: Math.min(60, tb.fontSize + 2) })}
+                                          className="p-1 hover:bg-gray-100 rounded text-xs"
+                                        >+</button>
+                                        <button 
+                                          onClick={() => removeTextbox(tb.id)}
+                                          className="p-1 hover:bg-red-50 text-red-500 rounded ml-1"
+                                        >
+                                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                          </svg>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div 
+                                      className="relative bg-transparent whitespace-pre-wrap p-1"
+                                      style={{ color: tb.color, fontSize: `${tb.fontSize}px` }}
+                                      onDoubleClick={() => updateTextbox(tb.id, { isEditing: true })}
+                                    >
+                                      {tb.text}
+                                      {selectedTextboxId === tb.id && !isDraggingState && (
+                                        <button 
+                                          onClick={() => removeTextbox(tb.id)}
+                                          className="absolute -top-4 -right-4 bg-red-500 text-white rounded-full p-0.5 shadow-sm hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                          </svg>
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </>
                         )}
                       </div>
                     </div>
