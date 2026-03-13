@@ -340,6 +340,7 @@ export async function DELETE(
       )
     }
 
+    // Delete all version files from disk (includes DOCX versions + annotation PNGs)
     const versions = await prisma.documentVersion.findMany({
       where: { documentId: id }
     })
@@ -350,6 +351,12 @@ export async function DELETE(
       }
     }
 
+    // Delete the reference file from disk if one exists
+    if (document.referenceFilePath) {
+      await deleteFile(document.referenceFilePath)
+    }
+
+    // Cascade delete removes versions, workflows, comments, notifications from DB
     await prisma.document.delete({
       where: { id }
     })
