@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useAuthStore } from '@/lib/store'
-import { getStatusColor, getStatusLabel, getComplianceTypeLabel } from '@/lib/permissions'
+import { getStatusColor, getStatusLabel, getComplianceTypeLabel, canUserCancelDocument } from '@/lib/permissions'
 import { format } from 'date-fns'
 import { sileo } from 'sileo'
 import { renderAsync } from 'docx-preview'
@@ -311,6 +311,8 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
   const [submitError, setSubmitError] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isCancelling, setIsCancelling] = useState(false)
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -629,6 +631,37 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
     }
   }
 
+  const handleCancelDocument = async () => {
+    if (!documentId) return
+
+    setIsCancelling(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/documents/${documentId}/cancel`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to cancel document')
+      }
+
+      window.dispatchEvent(new Event('documentDeleted'))
+      setShowCancelConfirm(false)
+      onClose()
+      sileo.success({ title: 'Document cancelled and deleted successfully' })
+    } catch (err: any) {
+      setError(err.message || 'Failed to cancel document')
+      console.error('Failed to cancel document:', err)
+      sileo.error({ title: err.message || 'Failed to cancel document' })
+    } finally {
+      setIsCancelling(false)
+    }
+  }
+
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -747,6 +780,19 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
   const showDisapproveOption = currentWorkflowStep?.role === 'APPROVER'
 
   const isDocumentComplete = doc?.currentStatus === 'APPROVED' || doc?.currentStatus === 'FINAL'
+
+  const workflowStepsForCancel = doc?.workflowInstances?.[0]?.steps.map((step: WorkflowStep) => ({
+    role: step.role,
+    status: step.status
+  })) || []
+
+  const canCancel = canUserCancelDocument(
+    doc?.currentStatus || '',
+    doc?.createdBy?.id || '',
+    user?.id || '',
+    user?.role || '',
+    workflowStepsForCancel
+  )
 
   const uniquePersonnel = Array.from(new Map(
     doc?.workflowInstances.flatMap(wi => wi.steps.flatMap(step => {
@@ -1083,6 +1129,17 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                         Download Current Version
                       </button>
                     </>
+                  )}
+                  {canCancel && (
+                    <button
+                      onClick={() => setShowCancelConfirm(true)}
+                      className="inline-flex w-full sm:w-auto justify-center items-center px-4 md:px-6 py-2 md:py-3 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-100 transition-all font-medium shadow-lg hover:shadow-xl"
+                    >
+                      <svg className="w-5 h-5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Cancel Submission
+                    </button>
                   )}
                   {user?.role === 'ADMIN' && (
                     <button
@@ -1730,6 +1787,90 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
         ) : null}
       </div>
     </div>
+
+      {/* Cancel Submission Confirmation Modal */}
+      {showCancelConfirm && (
+        <div
+          className="fixed inset-0 backdrop-blur-sm bg-black/40 flex items-center justify-center z-[60] p-4"
+          onClick={() => !isCancelling && setShowCancelConfirm(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-5">
+              <div className="flex items-center space-x-3">
+                <div className="bg-white/20 rounded-full p-2">
+                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Cancel & Delete Document</h3>
+                  <p className="text-amber-100 text-sm">This action cannot be undone</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-5">
+              <p className="text-gray-700 text-sm mb-3">
+                Are you sure you want to cancel and permanently delete <span className="font-semibold text-gray-900">&ldquo;{doc?.title}&rdquo;</span>?
+              </p>
+              <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 space-y-1.5">
+                <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide">The following will be removed:</p>
+                <ul className="text-sm text-amber-700 space-y-1">
+                  <li className="flex items-center gap-2">
+                    <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
+                    All document versions ({doc?.versions.filter(v => v.mimeType !== 'image/png').length || 0})
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
+                    Workflow timeline & comments
+                  </li>
+                  {doc?.referenceFilePath && (
+                    <li className="flex items-center gap-2">
+                      <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
+                      Reference file
+                    </li>
+                  )}
+                </ul>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+              <button
+                onClick={() => setShowCancelConfirm(false)}
+                disabled={isCancelling}
+                className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 w-full sm:w-auto text-center"
+              >
+                Go Back
+              </button>
+              <button
+                onClick={handleCancelDocument}
+                disabled={isCancelling}
+                className="px-5 py-2.5 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 w-full sm:w-auto shadow-sm"
+              >
+                {isCancelling ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Cancelling...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Cancel & Delete
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (

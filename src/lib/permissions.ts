@@ -23,6 +23,25 @@ export function canUserSubmitDocument(documentStatus: string, authorId: string, 
   return authorId === userId
 }
 
+export function canUserCancelDocument(
+  documentStatus: string,
+  authorId: string,
+  userId: string,
+  userRole: string,
+  workflowSteps: { role: string; status: string }[] = []
+): boolean {
+  if (documentStatus !== 'FOR_REVIEW') return false
+  if (authorId !== userId && userRole !== 'ADMIN') return false
+  
+  const hasAnyCompletedStep = workflowSteps.some(
+    step => step.status === 'COMPLETED'
+  )
+  
+  if (hasAnyCompletedStep) return false
+  
+  return true
+}
+
 export function getStatusColor(status: string): string {
   const colors: Record<string, string> = {
     DRAFT: 'bg-gray-100 text-gray-800',

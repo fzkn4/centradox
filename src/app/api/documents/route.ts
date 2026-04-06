@@ -293,7 +293,7 @@ export async function POST(request: NextRequest) {
     let documentData: any = {
       title,
       type,
-      currentStatus: 'DRAFT',
+      currentStatus: 'FOR_REVIEW',
       createdById: user.userId,
       priority: (priority as any) || 'RESTRICTED',
       complianceType: (complianceType as any) || null,
