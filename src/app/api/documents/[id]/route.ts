@@ -151,7 +151,8 @@ export async function GET(
           orderBy: {
             startedAt: 'desc'
           }
-        }
+        },
+        referenceFiles: true
       }
     })
 
@@ -351,9 +352,13 @@ export async function DELETE(
       }
     }
 
-    // Delete the reference file from disk if one exists
-    if (document.referenceFilePath) {
-      await deleteFile(document.referenceFilePath)
+    // Delete reference files from disk
+    const refFiles = await prisma.documentReferenceFile.findMany({
+      where: { documentId: id }
+    })
+
+    for (const refFile of refFiles) {
+      await deleteFile(refFile.filePath)
     }
 
     // Cascade delete removes versions, workflows, comments, notifications from DB

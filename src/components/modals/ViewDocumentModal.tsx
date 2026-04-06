@@ -91,10 +91,13 @@ interface DocumentData {
       name: string
     }
   }[]
-  referenceFilePath: string | null
-  referenceFileName: string | null
-  referenceMimeType: string | null
-  referenceFileSize: number | null
+  referenceFiles: {
+    id: string
+    fileName: string
+    fileSize: number
+    mimeType: string
+    filePath: string
+  }[]
   currentVersionId: string | null
   versions: DocumentVersion[]
   workflowInstances: WorkflowInstance[]
@@ -406,11 +409,11 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
     }
   }
 
-  const handleDownloadReference = async () => {
-    if (!documentId || !doc?.referenceFilePath) return
+  const handleDownloadReference = async (refFileId: string, fileName: string) => {
+    if (!documentId) return
 
     try {
-      const response = await fetch(`/api/documents/${documentId}/download-reference`, {
+      const response = await fetch(`/api/documents/${documentId}/download-reference/${refFileId}`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -424,7 +427,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
       const url = window.URL.createObjectURL(blob)
       const a = window.document.createElement('a')
       a.href = url
-      a.download = doc.referenceFileName || `reference-${documentId}`
+      a.download = fileName || `reference-${documentId}`
       window.document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
@@ -1070,27 +1073,33 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                   </div>
                 </div>
 
-                {doc.referenceFilePath && (
+                {doc.referenceFiles && doc.referenceFiles.length > 0 && (
                   <div className="border-t border-gray-200 pt-4 md:pt-6">
-                    <h4 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-3 md:mb-4">Reference Document</h4>
-                    <div className="bg-white border border-gray-200 rounded-lg p-3 md:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="flex items-center space-x-3 md:space-x-4">
-                        <div className="p-2 md:p-3 bg-indigo-50 text-indigo-600 rounded-lg flex-shrink-0">
-                          <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                          </svg>
+                    <h4 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-3 md:mb-4">
+                      Reference Documents ({doc.referenceFiles.length})
+                    </h4>
+                    <div className="space-y-2">
+                      {doc.referenceFiles.map((refFile) => (
+                        <div key={refFile.id} className="bg-white border border-gray-200 rounded-lg p-3 md:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="flex items-center space-x-3 md:space-x-4 min-w-0 flex-1">
+                            <div className="p-2 md:p-3 bg-indigo-50 text-indigo-600 rounded-lg flex-shrink-0">
+                              <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                              </svg>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-gray-900 truncate">{refFile.fileName}</p>
+                              <p className="text-xs text-gray-500">{formatFileSize(refFile.fileSize)}</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleDownloadReference(refFile.id, refFile.fileName)}
+                            className="w-full sm:w-auto px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 shadow-sm flex-shrink-0"
+                          >
+                            Download
+                          </button>
                         </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-gray-900 truncate">{doc.referenceFileName}</p>
-                          <p className="text-xs text-gray-500">{doc.referenceFileSize ? formatFileSize(doc.referenceFileSize) : 'Unknown size'}</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={handleDownloadReference}
-                        className="w-full sm:w-auto px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 shadow-sm"
-                      >
-                        Download
-                      </button>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -1827,10 +1836,10 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                     <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
                     Workflow timeline & comments
                   </li>
-                  {doc?.referenceFilePath && (
+                  {doc?.referenceFiles && doc.referenceFiles.length > 0 && (
                     <li className="flex items-center gap-2">
                       <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
-                      Reference file
+                      Reference files ({doc.referenceFiles.length})
                     </li>
                   )}
                 </ul>
@@ -1915,10 +1924,10 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                     <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
                     Workflow history &amp; comments
                   </li>
-                  {doc?.referenceFilePath && (
+                  {doc?.referenceFiles && doc.referenceFiles.length > 0 && (
                     <li className="flex items-center gap-2">
                       <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
-                      Reference file
+                      Reference files ({doc.referenceFiles.length})
                     </li>
                   )}
                 </ul>

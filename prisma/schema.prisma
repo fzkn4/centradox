@@ -108,6 +108,19 @@ model Document {
     workflowInstances WorkflowInstance[]
     comments          Comment[]
     notifications     Notification[] @relation("NotificationDocument")
+    referenceFiles    DocumentReferenceFile[] @relation("DocumentReferenceFiles")
+}
+
+model DocumentReferenceFile {
+  id        String   @id @default(uuid())
+  fileName  String
+  fileSize  Int
+  mimeType  String
+  filePath  String
+  createdAt DateTime @default(now())
+
+  document   Document @relation("DocumentReferenceFiles", fields: [documentId], references: [id], onDelete: Cascade)
+  documentId String
 }
 
 model DocumentVersion {

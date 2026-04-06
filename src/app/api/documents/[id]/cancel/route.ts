@@ -84,8 +84,12 @@ export async function POST(
       }
     }
 
-    if (document.referenceFilePath) {
-      const fullPath = join(process.cwd(), 'public', document.referenceFilePath)
+    const refFiles = await prisma.documentReferenceFile.findMany({
+      where: { documentId: id }
+    })
+
+    for (const refFile of refFiles) {
+      const fullPath = join(process.cwd(), 'public', refFile.filePath)
       if (existsSync(fullPath)) {
         await unlink(fullPath)
       }

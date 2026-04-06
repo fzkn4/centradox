@@ -48,7 +48,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
   })
   const [file, setFile] = useState<File | null>(null)
   const [dragActive, setDragActive] = useState(false)
-  const [referenceFile, setReferenceFile] = useState<File | null>(null)
+  const [referenceFiles, setReferenceFiles] = useState<File[]>([])
   const [referenceDragActive, setReferenceDragActive] = useState(false)
   const [loading, setLoading] = useState(false)
   const [loadingDepartments, setLoadingDepartments] = useState(false)
@@ -173,15 +173,20 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
     e.stopPropagation()
     setReferenceDragActive(false)
 
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setReferenceFile(e.dataTransfer.files[0])
+    if (e.dataTransfer.files) {
+      setReferenceFiles(prev => [...prev, ...Array.from(e.dataTransfer.files)])
     }
   }
 
   const handleReferenceFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setReferenceFile(e.target.files[0])
+    const files = e.target.files
+    if (files && files.length > 0) {
+      setReferenceFiles(prev => [...prev, ...Array.from(files)])
     }
+  }
+
+  const handleReferenceFileRemove = (index: number) => {
+    setReferenceFiles(prev => prev.filter((_, i) => i !== index))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -212,8 +217,10 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
     if (file) {
       formDataToSend.append('file', file)
     }
-    if (referenceFile) {
-      formDataToSend.append('referenceFile', referenceFile)
+    if (referenceFiles.length > 0) {
+      referenceFiles.forEach((refFile) => {
+        formDataToSend.append('referenceFiles', refFile)
+      })
     }
     formDataToSend.append('departmentIds', JSON.stringify(formData.departmentIds))
     formDataToSend.append('priority', formData.priority)
@@ -253,7 +260,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
       setTimelineSteps([])
       setStepToAdd({ departmentId: '', role: 'APPROVER' })
       setFile(null)
-      setReferenceFile(null)
+      setReferenceFiles([])
       setSelectedDepartments([])
       setIsDepartmentDropdownOpen(false)
       sileo.success({ title: 'Document created successfully' })
@@ -717,7 +724,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Upload Reference Document (Optional)
+                Upload Reference Documents (Optional)
               </label>
               <div
                 onDragEnter={handleReferenceDrag}
@@ -732,34 +739,53 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
               >
                 <input
                   type="file"
-                  id="referenceFile"
+                  id="referenceFiles"
                   onChange={handleReferenceFileChange}
                   className="hidden"
+                  multiple
                   accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*"
                 />
                 <label
-                  htmlFor="referenceFile"
+                  htmlFor="referenceFiles"
                   className="cursor-pointer block"
                 >
-                  {referenceFile ? (
-                    <div className="flex items-center justify-center space-x-4">
-                      <svg className="w-16 h-16 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0016.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                      </svg>
-                      <div className="text-left">
-                        <p className="text-sm font-semibold text-gray-900">{referenceFile.name}</p>
-                        <p className="text-sm text-gray-500">{formatFileSize(referenceFile.size)}</p>
+                  {referenceFiles.length > 0 ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-center space-x-2 text-sm text-gray-600">
+                        <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span>{referenceFiles.length} file{referenceFiles.length > 1 ? 's' : ''} selected</span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          setReferenceFile(null)
-                        }}
-                        className="ml-4 px-3 py-1 text-sm text-red-600 hover:text-red-800 border border-red-300 rounded hover:bg-red-50"
-                      >
-                        Remove
-                      </button>
+                      <div className="space-y-2 text-left max-h-40 overflow-y-auto">
+                        {referenceFiles.map((refFile, index) => (
+                          <div key={index} className="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-3 py-2">
+                            <div className="flex items-center space-x-3 min-w-0 flex-1">
+                              <svg className="w-8 h-8 text-indigo-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0016.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                              </svg>
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">{refFile.name}</p>
+                                <p className="text-xs text-gray-500">{formatFileSize(refFile.size)}</p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                handleReferenceFileRemove(index)
+                              }}
+                              className="ml-3 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors flex-shrink-0"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-500">Click to add more files</p>
                     </div>
                   ) : (
                     <div>
@@ -767,10 +793,10 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
                       <p className="text-sm text-gray-600 mb-1">
-                        Drag and drop your reference document here, or
+                        Drag and drop reference files here, or
                       </p>
                       <p className="text-sm font-medium text-indigo-600 hover:text-indigo-800">
-                        browse to choose a file
+                        browse to choose files
                       </p>
                     </div>
                   )}

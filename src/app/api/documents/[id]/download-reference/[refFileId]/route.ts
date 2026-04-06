@@ -17,7 +17,7 @@ async function getUserFromRequest(request: NextRequest) {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string; refFileId: string }> }
 ) {
   try {
     const user = await getUserFromRequest(request)
@@ -25,22 +25,17 @@ export async function GET(
       return new NextResponse('Unauthorized', { status: 401 })
     }
 
-    const { id } = await params
-    const document = await prisma.document.findUnique({
-      where: { id },
-      select: {
-        referenceFilePath: true,
-        referenceMimeType: true,
-        referenceFileName: true
-      }
+    const { id, refFileId } = await params
+
+    const refFile = await prisma.documentReferenceFile.findUnique({
+      where: { id: refFileId }
     })
 
-    if (!document || !document.referenceFilePath) {
-      return new NextResponse('Reference document not found', { status: 404 })
+    if (!refFile || refFile.documentId !== id) {
+      return new NextResponse('Reference file not found', { status: 404 })
     }
 
-    // Convert relative path like /uploads/... to absolute path
-    const absolutePath = join(process.cwd(), 'public', document.referenceFilePath)
+    const absolutePath = join(process.cwd(), 'public', refFile.filePath)
 
     if (!existsSync(absolutePath)) {
        return new NextResponse('File not found', { status: 404 })
@@ -51,8 +46,8 @@ export async function GET(
     return new NextResponse(fileBuffer, {
       status: 200,
       headers: {
-        'Content-Type': document.referenceMimeType || 'application/octet-stream',
-        'Content-Disposition': `attachment; filename="${document.referenceFileName}"`,
+        'Content-Type': refFile.mimeType || 'application/octet-stream',
+        'Content-Disposition': `attachment; filename="${refFile.fileName}"`,
       },
     })
   } catch (error) {
