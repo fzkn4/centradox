@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken, getTokenFromRequest } from '@/lib/auth'
-import { writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
-import { existsSync } from 'fs'
+import { assertAllowedDocumentFile, deleteStoredFile, saveUploadedFile } from '@/lib/uploads'
 
 async function getUserFromRequest(request: NextRequest) {
   const token = getTokenFromRequest(request)
@@ -13,41 +11,6 @@ async function getUserFromRequest(request: NextRequest) {
   if (!payload) return null
 
   return payload
-}
-
-async function ensureUploadsDir() {
-  const uploadsDir = join(process.cwd(), 'public', 'uploads')
-  if (!existsSync(uploadsDir)) {
-    await mkdir(uploadsDir, { recursive: true })
-  }
-  return uploadsDir
-}
-
-async function saveFile(file: File): Promise<{ filePath: string; fileName: string; fileSize: number; mimeType: string }> {
-  const uploadsDir = await ensureUploadsDir()
-  const bytes = await file.arrayBuffer()
-  const buffer = Buffer.from(bytes)
-  const uniqueFileName = `${Date.now()}-${file.name}`
-  const filePath = join(uploadsDir, uniqueFileName)
-
-  await writeFile(filePath, buffer)
-
-  return {
-    filePath: `/uploads/${uniqueFileName}`,
-    fileName: file.name,
-    fileSize: buffer.length,
-    mimeType: file.type
-  }
-}
-
-async function deleteFile(filePath: string) {
-  try {
-    const fullPath = join(process.cwd(), 'public', filePath)
-    const { unlink } = await import('fs/promises')
-    await unlink(fullPath)
-  } catch (error) {
-    console.error('Error deleting file:', error)
-  }
 }
 
 export async function GET(
@@ -95,6 +58,32 @@ export async function GET(
           orderBy: {
             versionNumber: 'desc'
           }
+        },
+        revisions: {
+          include: {
+            createdBy: {
+              select: { id: true, username: true, name: true, role: true },
+            },
+            files: {
+              include: {
+                annotations: {
+                  select: {
+                    id: true,
+                    fileName: true,
+                    fileSize: true,
+                    mimeType: true,
+                    pageNumber: true,
+                    workflowStepId: true,
+                    createdAt: true,
+                    createdById: true,
+                  },
+                  orderBy: { createdAt: 'desc' },
+                },
+              },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+          orderBy: { revisionNumber: 'desc' },
         },
         comments: {
           include: {
@@ -208,13 +197,21 @@ export async function PUT(
 
     const { id } = await params
     const formData = await request.formData()
-    const file = formData.get('file') as File
+    const files = (formData.getAll('files') as File[]).filter(Boolean)
+    const legacyFile = formData.get('file') as File | null
+    if (files.length === 0 && legacyFile) files.push(legacyFile)
 
-    if (!file) {
+    if (files.length === 0) {
       return NextResponse.json(
-        { error: 'File is required' },
+        { error: 'At least one file is required' },
         { status: 400 }
       )
+    }
+
+    try {
+      files.forEach((f) => assertAllowedDocumentFile(f))
+    } catch (e: any) {
+      return NextResponse.json({ error: e?.message ?? 'Invalid file type' }, { status: 400 })
     }
 
     const document = await prisma.document.findUnique({
@@ -232,6 +229,17 @@ export async function PUT(
       )
     }
 
+    if (
+      user.role !== 'ADMIN' &&
+      document.currentStatus !== 'DRAFT' &&
+      document.currentStatus !== 'CHANGES_REQUESTED'
+    ) {
+      return NextResponse.json(
+        { error: 'New revisions can only be uploaded in DRAFT or CHANGES_REQUESTED status' },
+        { status: 403 }
+      )
+    }
+
     if (document.createdById !== user.userId && user.role !== 'ADMIN') {
       return NextResponse.json(
         { error: 'Only document author can upload new versions' },
@@ -239,32 +247,43 @@ export async function PUT(
       )
     }
 
-    const latestVersion = await prisma.documentVersion.findFirst({
+    const latestRevision = await prisma.documentRevision.findFirst({
       where: { documentId: id },
-      orderBy: { versionNumber: 'desc' }
+      orderBy: { revisionNumber: 'desc' },
+      select: { revisionNumber: true },
     })
+    const nextRevisionNumber = latestRevision ? latestRevision.revisionNumber + 1 : 1
 
-    const newVersionNumber = latestVersion ? latestVersion.versionNumber + 1 : 1
-
-    const fileData = await saveFile(file)
-
-    const newVersion = await prisma.documentVersion.create({
+    const revision = await prisma.documentRevision.create({
       data: {
-        versionNumber: newVersionNumber,
-        fileName: fileData.fileName,
-        fileSize: fileData.fileSize,
-        mimeType: fileData.mimeType,
-        filePath: fileData.filePath,
         documentId: id,
-        createdById: user.userId
-      }
+        revisionNumber: nextRevisionNumber,
+        createdById: user.userId,
+      },
     })
+
+    await Promise.all(
+      files.map(async (f, idx) => {
+        const saved = await saveUploadedFile({
+          file: f,
+          relativeDir: `documents/${id}/rev-${nextRevisionNumber}`,
+        })
+        await prisma.documentFile.create({
+          data: {
+            revisionId: revision.id,
+            fileName: saved.fileName,
+            fileSize: saved.fileSize,
+            mimeType: saved.mimeType,
+            storagePath: saved.storagePath,
+            isPrimary: idx === 0,
+          },
+        })
+      })
+    )
 
     await prisma.document.update({
       where: { id },
-      data: {
-        currentVersionId: newVersion.id
-      }
+      data: { currentRevisionId: revision.id },
     })
 
     const updatedDocument = await prisma.document.findUnique({
@@ -341,24 +360,35 @@ export async function DELETE(
       )
     }
 
-    // Delete all version files from disk (includes DOCX versions + annotation PNGs)
-    const versions = await prisma.documentVersion.findMany({
-      where: { documentId: id }
+    // Delete revision files + annotations from disk
+    const revisions = await prisma.documentRevision.findMany({
+      where: { documentId: id },
+      include: {
+        files: {
+          include: { annotations: true },
+        },
+      },
     })
 
-    for (const version of versions) {
-      if (version.filePath) {
-        await deleteFile(version.filePath)
+    for (const rev of revisions) {
+      for (const file of rev.files) {
+        await deleteStoredFile(file.storagePath)
+        for (const ann of file.annotations) {
+          await deleteStoredFile(ann.storagePath)
+        }
       }
     }
 
-    // Delete reference files from disk
-    const refFiles = await prisma.documentReferenceFile.findMany({
-      where: { documentId: id }
-    })
+    // Delete legacy version files (if any still exist)
+    const versions = await prisma.documentVersion.findMany({ where: { documentId: id } })
+    for (const v of versions) {
+      await deleteStoredFile(v.filePath)
+    }
 
+    // Delete reference files from disk
+    const refFiles = await prisma.documentReferenceFile.findMany({ where: { documentId: id } })
     for (const refFile of refFiles) {
-      await deleteFile(refFile.filePath)
+      await deleteStoredFile(refFile.filePath)
     }
 
     // Cascade delete removes versions, workflows, comments, notifications from DB

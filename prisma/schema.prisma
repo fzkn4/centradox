@@ -6,7 +6,7 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./dev.db"
+  url      = env("DATABASE_URL")
 }
 
 enum Role {
@@ -75,10 +75,12 @@ model User {
 
     documentsCreated         Document[]         @relation("CreatedDocuments")
     documentVersionsCreated  DocumentVersion[]  @relation("CreatedVersions")
+    documentRevisionsCreated DocumentRevision[] @relation("CreatedRevisions")
     workflowStepsAssigned    WorkflowStep[]     @relation("AssignedSteps")
     workflowStepsCompleted   WorkflowStep[]     @relation("CompletedSteps")
     comments                 Comment[]          @relation("UserComments")
     notifications            Notification[]     @relation("UserNotifications")
+    fileAnnotationsCreated   DocumentFileAnnotation[] @relation("CreatedFileAnnotations")
 }
 
 model Document {
@@ -86,7 +88,7 @@ model Document {
   title             String
   type              String
   currentStatus     DocumentStatus    @default(DRAFT)
-  currentVersionId  String?
+  currentRevisionId String?
   lockedBy          String?
   priority          Priority          @default(RESTRICTED)
   complianceType    ComplianceType?
@@ -105,10 +107,61 @@ model Document {
     departments       DocumentDepartments[] @relation("DocumentDepartments")
 
     versions          DocumentVersion[]
+    revisions         DocumentRevision[]
     workflowInstances WorkflowInstance[]
     comments          Comment[]
     notifications     Notification[] @relation("NotificationDocument")
     referenceFiles    DocumentReferenceFile[] @relation("DocumentReferenceFiles")
+}
+
+model DocumentRevision {
+  id             String   @id @default(uuid())
+  revisionNumber Int
+  createdAt      DateTime @default(now())
+
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId String
+
+  createdBy   User   @relation("CreatedRevisions", fields: [createdById], references: [id])
+  createdById String
+
+  files       DocumentFile[]
+
+  @@unique([documentId, revisionNumber])
+}
+
+model DocumentFile {
+  id          String   @id @default(uuid())
+  fileName    String
+  fileSize    Int
+  mimeType    String
+  storagePath String // relative path under uploads/
+  isPrimary   Boolean @default(false)
+  createdAt   DateTime @default(now())
+
+  revision   DocumentRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  revisionId String
+
+  annotations DocumentFileAnnotation[]
+}
+
+model DocumentFileAnnotation {
+  id          String   @id @default(uuid())
+  fileName    String
+  fileSize    Int
+  mimeType    String
+  storagePath String // relative path under uploads/
+  pageNumber  Int      @default(1)
+  createdAt   DateTime @default(now())
+
+  documentFile   DocumentFile @relation(fields: [documentFileId], references: [id], onDelete: Cascade)
+  documentFileId String
+
+  workflowStep   WorkflowStep? @relation("WorkflowStepAnnotations", fields: [workflowStepId], references: [id], onDelete: SetNull)
+  workflowStepId String?
+
+  createdBy   User   @relation("CreatedFileAnnotations", fields: [createdById], references: [id])
+  createdById String
 }
 
 model DocumentReferenceFile {
@@ -174,6 +227,8 @@ model WorkflowStep {
   completedBy       User?             @relation("CompletedSteps", fields: [completedById], references: [id])
 
   department        Department?       @relation("DepartmentWorkflowSteps", fields: [departmentId], references: [id])
+
+  annotations       DocumentFileAnnotation[] @relation("WorkflowStepAnnotations")
 }
 
 model Comment {

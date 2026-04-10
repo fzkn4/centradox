@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
     })
 
     if (!userWithDepartments) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+      return NextResponse.json({ error: 'Unauthorized - User not found' }, { status: 401 })
     }
 
     const userDepartmentIds = userWithDepartments.departments.map((d: any) => d.id)

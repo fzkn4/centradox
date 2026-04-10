@@ -62,14 +62,50 @@ app.prepare().then(() => {
     })
   })
 
-  const port = process.env.PORT || 3000
+  const parsedPort = Number.parseInt(process.env.PORT ?? '', 10)
+  const startPort = Number.isFinite(parsedPort) ? parsedPort : 3000
 
-  server.once('error', (err) => {
-    console.error(err)
-    process.exit(1)
-  })
+  let port = startPort
+  const MAX_PORT_TRIES = 20
 
-  server.listen(port, () => {
-    console.log(`> Ready on http://localhost:${port}`)
-  })
+  // Dev ergonomics: if 3000 is already taken, automatically try the next ports
+  // instead of hard failing.
+  const listenWithFallback = () => {
+    const currentPort = port
+
+    const onListening = () => {
+      cleanup()
+      console.log(`> Ready on http://localhost:${currentPort}`)
+    }
+
+    const onError = (err) => {
+      cleanup()
+
+      if (
+        err &&
+        err.code === 'EADDRINUSE' &&
+        currentPort < startPort + MAX_PORT_TRIES
+      ) {
+        const nextPort = currentPort + 1
+        console.warn(`Port ${currentPort} is in use. Trying ${nextPort}...`)
+        port = nextPort
+        setTimeout(listenWithFallback, 100)
+        return
+      }
+
+      console.error(err)
+      process.exit(1)
+    }
+
+    const cleanup = () => {
+      server.off('listening', onListening)
+      server.off('error', onError)
+    }
+
+    server.once('listening', onListening)
+    server.once('error', onError)
+    server.listen(currentPort)
+  }
+
+  listenWithFallback()
 })

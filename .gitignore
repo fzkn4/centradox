@@ -36,9 +36,15 @@ next-env.d.ts
 # Prisma
 /prisma/*.db
 /prisma/*.db-journal
+/prisma/prisma/*.db
+/prisma/prisma/*.db-journal
 
 # File uploads
 /public/uploads
+/uploads
+
+# Local tooling
+.codex
 
 AGENTS.md
 /AGENTS.md

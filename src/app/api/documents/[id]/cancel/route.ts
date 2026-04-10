@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken, getTokenFromRequest } from '@/lib/auth'
 import { canUserCancelDocument } from '@/lib/permissions'
-import { existsSync } from 'fs'
-import { unlink } from 'fs/promises'
-import { join } from 'path'
+import { deleteStoredFile } from '@/lib/uploads'
 
 async function getUserFromRequest(request: NextRequest) {
   const token = getTokenFromRequest(request)
@@ -71,28 +69,29 @@ export async function POST(
       )
     }
 
-    const versions = await prisma.documentVersion.findMany({
-      where: { documentId: id }
+    const revisions = await prisma.documentRevision.findMany({
+      where: { documentId: id },
+      include: { files: { include: { annotations: true } } },
     })
 
-    for (const version of versions) {
-      if (version.filePath) {
-        const fullPath = join(process.cwd(), 'public', version.filePath)
-        if (existsSync(fullPath)) {
-          await unlink(fullPath)
+    for (const rev of revisions) {
+      for (const f of rev.files) {
+        await deleteStoredFile(f.storagePath)
+        for (const ann of f.annotations) {
+          await deleteStoredFile(ann.storagePath)
         }
       }
     }
 
-    const refFiles = await prisma.documentReferenceFile.findMany({
-      where: { documentId: id }
-    })
+    // Legacy fallback
+    const versions = await prisma.documentVersion.findMany({ where: { documentId: id } })
+    for (const v of versions) {
+      await deleteStoredFile(v.filePath)
+    }
 
+    const refFiles = await prisma.documentReferenceFile.findMany({ where: { documentId: id } })
     for (const refFile of refFiles) {
-      const fullPath = join(process.cwd(), 'public', refFile.filePath)
-      if (existsSync(fullPath)) {
-        await unlink(fullPath)
-      }
+      await deleteStoredFile(refFile.filePath)
     }
 
     await prisma.document.delete({

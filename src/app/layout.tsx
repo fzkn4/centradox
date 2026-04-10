@@ -4,6 +4,7 @@ import './globals.css'
 import { DraggableFAB } from '@/components/DraggableFAB'
 import { Toaster } from 'sileo'
 import { SocketProvider } from '@/components/providers/SocketProvider'
+import { ClientInit } from '@/components/ClientInit'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -24,6 +25,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <SocketProvider>
+          <ClientInit />
           <Toaster position="bottom-right" theme="light" />
           {children}
           <DraggableFAB />

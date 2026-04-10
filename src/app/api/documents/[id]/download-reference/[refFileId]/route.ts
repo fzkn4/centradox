@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken, getTokenFromRequest } from '@/lib/auth'
-import { readFile } from 'fs/promises'
-import { join } from 'path'
-import { existsSync } from 'fs'
+import { readStoredFile } from '@/lib/uploads'
 
 async function getUserFromRequest(request: NextRequest) {
   const token = getTokenFromRequest(request)
@@ -34,16 +32,10 @@ export async function GET(
     if (!refFile || refFile.documentId !== id) {
       return new NextResponse('Reference file not found', { status: 404 })
     }
+    const fileBuffer = await readStoredFile(refFile.filePath)
+    const body = new Uint8Array(fileBuffer)
 
-    const absolutePath = join(process.cwd(), 'public', refFile.filePath)
-
-    if (!existsSync(absolutePath)) {
-       return new NextResponse('File not found', { status: 404 })
-    }
-
-    const fileBuffer = await readFile(absolutePath)
-
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(body, {
       status: 200,
       headers: {
         'Content-Type': refFile.mimeType || 'application/octet-stream',

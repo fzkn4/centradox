@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken, getTokenFromRequest } from '@/lib/auth'
-import { writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
-import { existsSync } from 'fs'
+import { assertAllowedDocumentFile, deleteStoredFile, saveUploadedFile } from '@/lib/uploads'
 
 async function getUserFromRequest(request: NextRequest) {
   const token = getTokenFromRequest(request)
@@ -15,28 +13,68 @@ async function getUserFromRequest(request: NextRequest) {
   return payload
 }
 
-async function ensureUploadsDir() {
-  const uploadsDir = join(process.cwd(), 'public', 'uploads')
-  if (!existsSync(uploadsDir)) {
-    await mkdir(uploadsDir, { recursive: true })
-  }
-  return uploadsDir
+function canUserActOnStep(params: { stepRole: string; userRole: string }): boolean {
+  const { stepRole, userRole } = params
+  if (userRole === 'ADMIN') return true
+
+  // Business rule: "DRAFTER steps" are actionable by DRAFTER and EDITOR.
+  if (stepRole === 'DRAFTER') return userRole === 'DRAFTER' || userRole === 'EDITOR'
+  return stepRole === userRole
 }
 
-async function saveFile(file: File): Promise<{ filePath: string; fileName: string; fileSize: number; mimeType: string }> {
-  const uploadsDir = await ensureUploadsDir()
-  const bytes = await file.arrayBuffer()
-  const buffer = Buffer.from(bytes)
-  const uniqueFileName = `${Date.now()}-${file.name}`
-  const filePath = join(uploadsDir, uniqueFileName)
+async function createRevisionBundle(params: {
+  documentId: string
+  createdById: string
+  files: File[]
+}): Promise<{ revisionId: string; revisionNumber: number }> {
+  const { documentId, createdById, files } = params
 
-  await writeFile(filePath, buffer)
+  const latest = await prisma.documentRevision.findFirst({
+    where: { documentId },
+    orderBy: { revisionNumber: 'desc' },
+    select: { revisionNumber: true },
+  })
+  const revisionNumber = latest ? latest.revisionNumber + 1 : 1
 
-  return {
-    filePath: `/uploads/${uniqueFileName}`,
-    fileName: file.name,
-    fileSize: buffer.length,
-    mimeType: file.type
+  const revision = await prisma.documentRevision.create({
+    data: {
+      documentId,
+      revisionNumber,
+      createdById,
+    },
+    select: { id: true, revisionNumber: true },
+  })
+
+  const createdFileStoragePaths: string[] = []
+  try {
+    for (let idx = 0; idx < files.length; idx++) {
+      const file = files[idx]
+      const saved = await saveUploadedFile({
+        file,
+        relativeDir: `documents/${documentId}/rev-${revisionNumber}`,
+      })
+      createdFileStoragePaths.push(saved.storagePath)
+      await prisma.documentFile.create({
+        data: {
+          revisionId: revision.id,
+          fileName: saved.fileName,
+          fileSize: saved.fileSize,
+          mimeType: saved.mimeType,
+          storagePath: saved.storagePath,
+          isPrimary: idx === 0,
+        },
+      })
+    }
+
+    await prisma.document.update({
+      where: { id: documentId },
+      data: { currentRevisionId: revision.id },
+    })
+
+    return { revisionId: revision.id, revisionNumber: revision.revisionNumber }
+  } catch (error) {
+    await Promise.all(createdFileStoragePaths.map((p) => deleteStoredFile(p)))
+    throw error
   }
 }
 
@@ -53,64 +91,42 @@ export async function POST(
     const { id } = await params
     const formData = await request.formData()
 
-    const action = formData.get('action') as string
-    const comment = formData.get('comment') as string
-    const file = formData.get('file') as File | null
-    const confidentialComment = formData.get('confidentialComment') as string || null
-    const confidentialCommentVisibleToStr = formData.get('confidentialCommentVisibleTo') as string || null
-
-    let versionId: string | null = null
-    let versionNumber: number | null = null
+    const action = String(formData.get('action') ?? '')
+    const comment = String(formData.get('comment') ?? '')
+    const confidentialComment = (formData.get('confidentialComment') as string) || null
+    const confidentialCommentVisibleToStr =
+      (formData.get('confidentialCommentVisibleTo') as string) || null
 
     if (action !== 'complete-step' && action !== 'disapprove-step') {
-      return NextResponse.json(
-        { error: 'Invalid action' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
     }
 
-    // Comment is required for disapproval
-    if (action === 'disapprove-step' && (!comment || comment.trim() === '')) {
-      return NextResponse.json(
-        { error: 'Comment is required for disapproval' },
-        { status: 400 }
-      )
-    }
+    const incomingFiles = (formData.getAll('files') as File[]).filter(Boolean)
+    const legacyFile = formData.get('file') as File | null
+    if (incomingFiles.length === 0 && legacyFile) incomingFiles.push(legacyFile)
 
-    // Comment is optional for DRAFTER steps (draft submission), required for others completing steps
-    if (action === 'complete-step' && user.role !== 'DRAFTER' && (!comment || comment.trim() === '')) {
-      return NextResponse.json(
-        { error: 'Comment is required' },
-        { status: 400 }
-      )
-    }
-
-     const document = await prisma.document.findUnique({
-       where: { id },
-       include: {
-         createdBy: true,
-         departments: {
-           include: {
-             department: {
-               select: {
-                 id: true,
-                 name: true
-               }
-             }
-           }
-         },
-         workflowInstances: {
-           include: {
-             steps: {
-               include: {
-                 assignedTo: true,
-                 department: true
-               }
-             }
-           }
-         }
-       }
-     })
+    const document = await prisma.document.findUnique({
+      where: { id },
+      include: {
+        departments: {
+          include: {
+            department: { select: { id: true, name: true } },
+          },
+        },
+        workflowInstances: {
+          include: {
+            steps: {
+              include: {
+                assignedTo: true,
+                department: true,
+              },
+            },
+          },
+          orderBy: { startedAt: 'desc' },
+          take: 1,
+        },
+      },
+    })
 
     if (!document) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 })
@@ -118,122 +134,103 @@ export async function POST(
 
     const workflowInstance = document.workflowInstances[0]
     if (!workflowInstance) {
-      return NextResponse.json(
-        { error: 'No active workflow' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'No active workflow' }, { status: 400 })
     }
 
     const currentStep = workflowInstance.steps.find(
       (step: any) => step.stepOrder === workflowInstance.currentStep
     )
-
     if (!currentStep) {
-      return NextResponse.json(
-        { error: 'Invalid workflow state' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invalid workflow state' }, { status: 400 })
     }
 
-    if (currentStep.role !== user.role && user.role !== 'ADMIN') {
-      return NextResponse.json(
-        { error: 'Not authorized to complete this step' },
-        { status: 403 }
-      )
+    if (!canUserActOnStep({ stepRole: currentStep.role, userRole: user.role })) {
+      return NextResponse.json({ error: 'Not authorized to complete this step' }, { status: 403 })
     }
 
-    const userWithDepartments = await prisma.user.findUnique({
-      where: { id: user.userId },
-      include: {
-        departments: true
+    if (user.role !== 'ADMIN') {
+      const userWithDepartments = await prisma.user.findUnique({
+        where: { id: user.userId },
+        select: { departments: { select: { id: true } } },
+      })
+
+      const isInDepartment =
+        !currentStep.departmentId ||
+        Boolean(userWithDepartments?.departments.some((d: { id: string }) => d.id === currentStep.departmentId))
+
+      if (!isInDepartment) {
+        return NextResponse.json({ error: 'You are not in the assigned department' }, { status: 403 })
       }
-    })
-
-    const isInDepartment = userWithDepartments?.departments.some(
-      (dept: any) => dept.id === currentStep.departmentId
-    )
-
-    if (!isInDepartment && user.role !== 'ADMIN') {
-      return NextResponse.json(
-        { error: 'You are not in the assigned department' },
-        { status: 403 }
-      )
     }
 
-    if (action === 'complete-step' && (currentStep.role === 'DRAFTER') && (!file || file.size === 0)) {
-      const roleName = 'draft'
+    const isDrafterStep = currentStep.role === 'DRAFTER'
+    const isApproverStep = currentStep.role === 'APPROVER'
+    const isEditorCompletingDrafterStep = isDrafterStep && user.role === 'EDITOR'
+
+    const requiresUpload = action === 'complete-step' && isDrafterStep
+    const requiresComment =
+      action === 'disapprove-step' ||
+      isApproverStep ||
+      isEditorCompletingDrafterStep ||
+      (isDrafterStep && document.currentStatus === 'CHANGES_REQUESTED')
+
+    if (requiresComment && comment.trim() === '') {
+      return NextResponse.json({ error: 'Comment is required' }, { status: 400 })
+    }
+
+    if (requiresUpload && incomingFiles.length === 0) {
+      return NextResponse.json({ error: 'At least one document file is required' }, { status: 400 })
+    }
+
+    // Approver uploads are intentionally not creating new revisions.
+    if (action === 'complete-step' && isApproverStep && incomingFiles.length > 0) {
       return NextResponse.json(
-        { error: `Document upload is required to submit ${roleName}` },
+        { error: 'File upload is not supported for approver steps. Use annotations or add a comment.' },
         { status: 400 }
       )
     }
 
-    const isAnnotation = file && file.name.toLowerCase().endsWith('.png') && file.type === 'image/png';
-
-    if (file && !file.name.toLowerCase().endsWith('.docx') && !isAnnotation) {
-      return NextResponse.json(
-        { error: 'Only .docx files are allowed for security reasons.' },
-        { status: 400 }
-      )
+    if (incomingFiles.length > 0) {
+      try {
+        incomingFiles.forEach((f) => assertAllowedDocumentFile(f))
+      } catch (e: any) {
+        return NextResponse.json({ error: e?.message ?? 'Invalid file type' }, { status: 400 })
+      }
     }
 
     if (action === 'disapprove-step') {
-      let finalComment = `[DISAPPROVED] ${comment.trim()}`
-      if (file && file.size > 0 && isAnnotation) {
-        const latestVersion = await prisma.documentVersion.findFirst({
-          where: { documentId: id },
-          orderBy: { versionNumber: 'desc' }
-        })
-        const versionNumber = latestVersion ? latestVersion.versionNumber + 1 : 1
-        const fileData = await saveFile(file as File)
-        const newVersion = await prisma.documentVersion.create({
-          data: {
-            versionNumber,
-            fileName: fileData.fileName,
-            fileSize: fileData.fileSize,
-            mimeType: fileData.mimeType,
-            filePath: fileData.filePath,
-            documentId: id,
-            createdById: user.userId
-          }
-        })
-        finalComment += `\n\n[Attached Annotation Drawing](/api/documents/${id}/download/${newVersion.id})`
+      if (!isApproverStep && user.role !== 'ADMIN') {
+        return NextResponse.json({ error: 'Only approvers can disapprove' }, { status: 403 })
       }
 
-      // Create a comment recording the disapproval reason
+      const finalComment = `[DISAPPROVED] ${comment.trim()}`
+
       await prisma.comment.create({
         data: {
           text: finalComment,
           documentId: id,
-          authorId: user.userId
-        }
+          authorId: user.userId,
+        },
       })
 
-      // Find the document creator's primary department
+      // Find the document creator's primary department (best-effort).
       const creator = await prisma.user.findUnique({
         where: { id: document.createdById },
-        include: {
-          departments: true
-        }
+        select: { departments: { select: { id: true } } },
       })
       const drafterDepartmentId = creator?.departments[0]?.id || null
 
-      // Shift subsequent steps down by 2 to make room for Drafter AND the re-review
+      // Shift subsequent steps down by 2 to make room for: DRAFTER fix step + re-review step
       await prisma.workflowStep.updateMany({
         where: {
           workflowInstanceId: workflowInstance.id,
-          stepOrder: {
-            gt: currentStep.stepOrder
-          }
+          stepOrder: { gt: currentStep.stepOrder },
         },
         data: {
-          stepOrder: {
-            increment: 2
-          }
-        }
+          stepOrder: { increment: 2 },
+        },
       })
 
-      // Complete the current step indicating it was disapproved
       await prisma.workflowStep.update({
         where: { id: currentStep.id },
         data: {
@@ -241,23 +238,35 @@ export async function POST(
           completedAt: new Date(),
           completedById: user.userId,
           comment: finalComment,
-          confidentialComment: confidentialComment,
-          confidentialCommentVisibleTo: confidentialCommentVisibleToStr
-        }
+          confidentialComment,
+          confidentialCommentVisibleTo: confidentialCommentVisibleToStr,
+        },
       })
 
-      // Insert new DRAFTER step at stepOrder + 1
+      // Link any annotations made by this user that aren't yet linked to a step
+      await prisma.documentFileAnnotation.updateMany({
+        where: {
+          documentFile: {
+            revision: { documentId: id }
+          },
+          createdById: user.userId,
+          workflowStepId: null,
+        },
+        data: {
+          workflowStepId: currentStep.id,
+        },
+      })
+
       await prisma.workflowStep.create({
         data: {
           workflowInstanceId: workflowInstance.id,
           stepOrder: currentStep.stepOrder + 1,
           departmentId: drafterDepartmentId,
           role: 'DRAFTER',
-          status: 'PENDING'
-        }
+          status: 'PENDING',
+        },
       })
 
-      // Insert cloned APPROVER step at stepOrder + 2 for the re-review
       await prisma.workflowStep.create({
         data: {
           workflowInstanceId: workflowInstance.id,
@@ -265,110 +274,65 @@ export async function POST(
           departmentId: currentStep.departmentId,
           assignedToId: currentStep.assignedToId,
           role: currentStep.role,
-          status: 'PENDING'
-        }
+          status: 'PENDING',
+        },
       })
-      
-      // Advance currentStep pointer to the Drafter
+
       await prisma.workflowInstance.update({
         where: { id: workflowInstance.id },
-        data: {
-          currentStep: currentStep.stepOrder + 1
-        }
+        data: { currentStep: currentStep.stepOrder + 1 },
       })
 
-      // Update document status
       await prisma.document.update({
         where: { id },
-        data: {
-          currentStatus: 'CHANGES_REQUESTED'
-        }
+        data: { currentStatus: 'CHANGES_REQUESTED' },
       })
 
-      // Notify users (drafters or previous step users) that changes are requested
+      // Notify department users + admins.
       try {
         const admins = await prisma.user.findMany({
           where: { role: 'ADMIN' },
-          select: { id: true }
+          select: { id: true },
         })
-        
-        let departmentUsers: any[] = []
-        if (document.departments.length > 0) {
-          departmentUsers = await prisma.user.findMany({
-            where: {
-              departments: {
-                some: { id: { in: document.departments.map((d: any) => d.departmentId) } }
-              }
-            },
-            select: { id: true }
-          })
-        }
+        const departmentUsers =
+          document.departments.length > 0
+            ? await prisma.user.findMany({
+                where: {
+                  departments: {
+                    some: { id: { in: document.departments.map((d: any) => d.departmentId) } },
+                  },
+                },
+                select: { id: true },
+              })
+            : []
 
-        const notifiedUserIds = [...new Set([...departmentUsers.map((u: any) => u.id), ...admins.map((u: any) => u.id)])]
-        
+        const notifiedUserIds = [
+          ...new Set([
+            ...departmentUsers.map((u: { id: string }) => u.id),
+            ...admins.map((u: { id: string }) => u.id),
+          ]),
+        ]
+
         if (notifiedUserIds.length > 0) {
           await prisma.notification.createMany({
-            data: notifiedUserIds.map(userId => ({
+            data: notifiedUserIds.map((userId) => ({
               userId,
               type: 'changes_requested',
               message: `Changes requested for "${document.title}"`,
-              documentId: document.id
-            }))
+              documentId: document.id,
+            })),
           })
         }
       } catch (notificationError) {
         console.error('Failed to create disapproval notifications:', notificationError)
       }
     } else {
-      // Original complete-step logic
-
-      let finalComment = comment.trim()
-
-      if (file && file.size > 0 && isAnnotation) {
-        const latestVersion = await prisma.documentVersion.findFirst({
-          where: { documentId: id },
-          orderBy: { versionNumber: 'desc' }
-        })
-        const versionNumber = latestVersion ? latestVersion.versionNumber + 1 : 1
-        const fileData = await saveFile(file as File)
-        const newVersion = await prisma.documentVersion.create({
-          data: {
-            versionNumber,
-            fileName: fileData.fileName,
-            fileSize: fileData.fileSize,
-            mimeType: fileData.mimeType,
-            filePath: fileData.filePath,
-            documentId: id,
-            createdById: user.userId
-          }
-        })
-        finalComment += `\n\n[Attached Annotation Drawing](/api/documents/${id}/download/${newVersion.id})`
-      } else if (file && file.size > 0 && !isAnnotation) {
-        const latestVersion = await prisma.documentVersion.findFirst({
-          where: { documentId: id },
-          orderBy: { versionNumber: 'desc' }
-        })
-
-        const versionNumber = latestVersion ? latestVersion.versionNumber + 1 : 1
-        const fileData = await saveFile(file as File)
-
-        const newVersion = await prisma.documentVersion.create({
-          data: {
-            versionNumber,
-            fileName: fileData.fileName,
-            fileSize: fileData.fileSize,
-            mimeType: fileData.mimeType,
-            filePath: fileData.filePath,
-            documentId: id,
-            createdById: user.userId
-          }
-        })
-
-        await prisma.document.update({
-          where: { id },
-          data: {
-            currentVersionId: newVersion.id
-          }
+      // DRAFTER/EDITOR completion creates a new revision bundle.
+      if (isDrafterStep && incomingFiles.length > 0) {
+        await createRevisionBundle({
+          documentId: id,
+          createdById: user.userId,
+          files: incomingFiles,
         })
       }
 
@@ -377,277 +341,203 @@ export async function POST(
         data: {
           status: 'COMPLETED',
           completedAt: new Date(),
-          comment: finalComment,
-          confidentialComment: confidentialComment,
+          comment: comment.trim(),
+          confidentialComment,
           confidentialCommentVisibleTo: confidentialCommentVisibleToStr,
-          completedById: user.userId
-        }
+          completedById: user.userId,
+        },
       })
 
-    // Create notifications for department users and admins
-    try {
-      if (document.departments.length > 0) {
-        const departmentUsers = await prisma.user.findMany({
-          where: {
-            departments: {
-              some: {
-                  id: { in: document.departments.map((d: any) => d.departmentId) }
-              }
-            }
+      // Link any annotations made by this user that aren't yet linked to a step
+      await prisma.documentFileAnnotation.updateMany({
+        where: {
+          documentFile: {
+            revision: { documentId: id }
           },
-          select: { id: true }
-        })
+          createdById: user.userId,
+          workflowStepId: null,
+        },
+        data: {
+          workflowStepId: currentStep.id,
+        },
+      })
 
-        const admins = await prisma.user.findMany({
-          where: { role: 'ADMIN' },
-          select: { id: true }
-        })
+      // Step completion notifications (best-effort).
+      try {
+        const admins = await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } })
+        const departmentUsers =
+          document.departments.length > 0
+            ? await prisma.user.findMany({
+                where: {
+                  departments: {
+                    some: { id: { in: document.departments.map((d: any) => d.departmentId) } },
+                  },
+                },
+                select: { id: true },
+              })
+            : []
 
-        const notifiedUserIds = [...new Set([...departmentUsers.map((u: any) => u.id), ...admins.map((u: any) => u.id)])]
-
+        const notifiedUserIds = [
+          ...new Set([
+            ...departmentUsers.map((u: { id: string }) => u.id),
+            ...admins.map((u: { id: string }) => u.id),
+          ]),
+        ]
         const departmentNames = document.departments.map((d: any) => d.department.name).join(', ')
-
-        console.log(`Creating step completion notifications for "${document.title}" in ${departmentNames}: found ${departmentUsers.length} department users, ${admins.length} admins, total ${notifiedUserIds.length} notifications`)
 
         if (notifiedUserIds.length > 0) {
           await prisma.notification.createMany({
-            data: notifiedUserIds.map(userId => ({
+            data: notifiedUserIds.map((userId) => ({
               userId,
               type: 'step_completed',
-              message: `Step completed for "${document.title}" in ${departmentNames || 'your department'}`,
-              documentId: document.id
-            }))
+              message: `Step completed for "${document.title}"${departmentNames ? ` in ${departmentNames}` : ''}`,
+              documentId: document.id,
+            })),
           })
-          console.log(`Successfully created ${notifiedUserIds.length} step completion notifications for "${document.title}"`)
-        } else {
-          console.warn(`No users found to notify for step completion of "${document.title}" in departments ${document.departments.map((d: any) => d.departmentId).join(', ')}`)
+        }
+      } catch (notificationError) {
+        console.error('Failed to create step completion notifications:', notificationError)
+      }
+
+      // Find next step and advance workflow
+      const nextStep = workflowInstance.steps
+        .filter((s: any) => s.stepOrder > currentStep.stepOrder)
+        .sort((a: any, b: any) => a.stepOrder - b.stepOrder)[0]
+
+      if (nextStep) {
+        await prisma.workflowInstance.update({
+          where: { id: workflowInstance.id },
+          data: { currentStep: nextStep.stepOrder },
+        })
+
+        if (document.currentStatus === 'CHANGES_REQUESTED' || document.currentStatus === 'DRAFT') {
+          await prisma.document.update({
+            where: { id },
+            data: { currentStatus: 'FOR_REVIEW' },
+          })
         }
       } else {
-        const admins = await prisma.user.findMany({
-          where: { role: 'ADMIN' },
-          select: { id: true }
+        await prisma.workflowInstance.update({
+          where: { id: workflowInstance.id },
+          data: { completedAt: new Date(), currentStep: 999 },
         })
 
-        console.log(`Creating step completion notifications for "${document.title}" (no departments): found ${admins.length} admins`)
-
-        if (admins.length > 0) {
-          await prisma.notification.createMany({
-            data: admins.map((admin: any) => ({
-              userId: admin.id,
-              type: 'step_completed',
-              message: `Step completed for "${document.title}"`,
-              documentId: document.id
-            }))
-          })
-          console.log(`Successfully created ${admins.length} step completion notifications for "${document.title}"`)
-        } else {
-          console.warn(`No admins found to notify for step completion of "${document.title}"`)
-        }
-      }
-    } catch (notificationError) {
-      console.error('Failed to create step completion notifications:', notificationError)
-      // Don't fail the step completion if notifications fail
-    }
-
-    const nextStep = workflowInstance.steps.find(
-      (step: any) => step.stepOrder === workflowInstance.currentStep + 1
-    )
-
-    if (nextStep) {
-      await prisma.workflowInstance.update({
-        where: { id: workflowInstance.id },
-        data: {
-          currentStep: nextStep.stepOrder
-        }
-      })
-
-      // If document was in CHANGES_REQUESTED or DRAFT and is moving to next step, put it in FOR_REVIEW
-      if (document.currentStatus === 'CHANGES_REQUESTED' || document.currentStatus === 'DRAFT') {
         await prisma.document.update({
           where: { id },
-          data: {
-            currentStatus: 'FOR_REVIEW'
-          }
+          data: { currentStatus: 'APPROVED' },
         })
-      }
-    } else {
-      await prisma.workflowInstance.update({
-        where: { id: workflowInstance.id },
-        data: {
-          completedAt: new Date(),
-          currentStep: 999
-        }
-      })
 
-      await prisma.document.update({
-        where: { id },
-        data: {
-          currentStatus: 'APPROVED'
-        }
-      })
+        // Approval notifications (best-effort).
+        try {
+          const admins = await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } })
+          const departmentUsers =
+            document.departments.length > 0
+              ? await prisma.user.findMany({
+                  where: {
+                    departments: {
+                      some: { id: { in: document.departments.map((d: any) => d.departmentId) } },
+                    },
+                  },
+                  select: { id: true },
+                })
+              : []
 
-      // Create approval notifications for department users and admins
-      try {
-        if (document.departments.length > 0) {
-          const departmentUsers = await prisma.user.findMany({
-            where: {
-              departments: {
-                some: {
-                id: { in: document.departments.map((d: any) => d.departmentId) }
-                }
-              }
-            },
-            select: { id: true }
-          })
-
-          const admins = await prisma.user.findMany({
-            where: { role: 'ADMIN' },
-            select: { id: true }
-          })
-
-          const notifiedUserIds = [...new Set([...departmentUsers.map((u: any) => u.id), ...admins.map((u: any) => u.id)])]
-
+          const notifiedUserIds = [
+            ...new Set([
+              ...departmentUsers.map((u: { id: string }) => u.id),
+              ...admins.map((u: { id: string }) => u.id),
+            ]),
+          ]
           const departmentNames = document.departments.map((d: any) => d.department.name).join(', ')
-
-          console.log(`Creating approval notifications for "${document.title}" in ${departmentNames}: found ${departmentUsers.length} department users, ${admins.length} admins, total ${notifiedUserIds.length} notifications`)
 
           if (notifiedUserIds.length > 0) {
             await prisma.notification.createMany({
-              data: notifiedUserIds.map(userId => ({
+              data: notifiedUserIds.map((userId) => ({
                 userId,
                 type: 'document_approved',
-                message: `Document "${document.title}" has been approved in ${departmentNames || 'your department'}`,
-                documentId: document.id
-              }))
+                message: `Document "${document.title}" has been approved${departmentNames ? ` in ${departmentNames}` : ''}`,
+                documentId: document.id,
+              })),
             })
-            console.log(`Successfully created ${notifiedUserIds.length} approval notifications for "${document.title}"`)
-          } else {
-            console.warn(`No users found to notify for approval of "${document.title}" in departments ${document.departments.map((d: any) => d.departmentId).join(', ')}`)
           }
-        } else {
-          const admins = await prisma.user.findMany({
-            where: { role: 'ADMIN' },
-            select: { id: true }
-          })
-
-          console.log(`Creating approval notifications for "${document.title}" (no departments): found ${admins.length} admins`)
-
-          if (admins.length > 0) {
-            await prisma.notification.createMany({
-              data: admins.map((admin: any) => ({
-                userId: admin.id,
-                type: 'document_approved',
-                message: `Document "${document.title}" has been approved`,
-                documentId: document.id
-              }))
-            })
-            console.log(`Successfully created ${admins.length} approval notifications for "${document.title}"`)
-          } else {
-            console.warn(`No admins found to notify for approval of "${document.title}"`)
-          }
+        } catch (notificationError) {
+          console.error('Failed to create approval notifications:', notificationError)
         }
-      } catch (notificationError) {
-        console.error('Failed to create approval notifications:', notificationError)
-        // Don't fail the document approval if notifications fail
       }
-    }
     }
 
     const updatedDocument = await prisma.document.findUnique({
       where: { id },
       include: {
-        createdBy: {
-          select: {
-            id: true,
-            username: true,
-            name: true,
-            role: true
-          }
-        },
+        createdBy: { select: { id: true, username: true, name: true, role: true } },
         departments: {
-          include: {
-            department: {
-              select: {
-                id: true,
-                name: true
-              }
-            }
-          }
+          include: { department: { select: { id: true, name: true } } },
         },
         versions: {
-          include: {
-            createdBy: {
-              select: {
-                id: true,
-                name: true
-              }
-            }
-          },
-          orderBy: {
-            versionNumber: 'desc'
-          }
+          include: { createdBy: { select: { id: true, name: true } } },
+          orderBy: { versionNumber: 'desc' },
         },
+        revisions: {
+          include: {
+            createdBy: { select: { id: true, username: true, name: true, role: true } },
+            files: {
+              include: {
+                annotations: {
+                  select: {
+                    id: true,
+                    fileName: true,
+                    fileSize: true,
+                    mimeType: true,
+                    pageNumber: true,
+                    workflowStepId: true,
+                    createdAt: true,
+                    createdById: true,
+                  },
+                  orderBy: { createdAt: 'desc' },
+                },
+              },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+          orderBy: { revisionNumber: 'desc' },
+        },
+        referenceFiles: true,
         workflowInstances: {
           include: {
             steps: {
               include: {
-                assignedTo: {
-                  select: {
-                    id: true,
-                    name: true
-                  }
-                },
-                completedBy: {
-                  select: {
-                    id: true,
-                    name: true,
-                    role: true
-                  }
-                }
+                assignedTo: { select: { id: true, name: true } },
+                completedBy: { select: { id: true, name: true, role: true } },
               },
-              orderBy: {
-                stepOrder: 'asc'
-              }
-            }
+              orderBy: { stepOrder: 'asc' },
+            },
           },
-          orderBy: {
-            startedAt: 'desc'
-          }
-        }
-      }
+          orderBy: { startedAt: 'desc' },
+        },
+      },
     })
 
-    // EMIT SOCKET EVENT FOR REAL-TIME UPDATES via Internal Server Endpoint
+    // EMIT SOCKET EVENT FOR REAL-TIME UPDATES via internal server endpoint (best-effort)
     try {
       const eventName = action === 'disapprove-step' ? 'document_disapproved' : 'step_completed'
       const payload = {
         documentId: id,
-        title: document.title,
-        ...(action !== 'disapprove-step' && { isFinalStep: updatedDocument?.currentStatus === 'APPROVED' })
+        title: updatedDocument?.title ?? document.title,
+        ...(action !== 'disapprove-step' && { isFinalStep: updatedDocument?.currentStatus === 'APPROVED' }),
       }
-      
+
       await fetch(`http://localhost:${process.env.PORT || 3000}/api/internal/socket-emit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          event: eventName,
-          payload
-        })
+        body: JSON.stringify({ event: eventName, payload }),
       })
     } catch (err) {
       console.error('Failed to internal socket emit:', err)
     }
 
-    return NextResponse.json({
-      document: updatedDocument,
-      versionId,
-      versionNumber
-    })
+    return NextResponse.json({ document: updatedDocument })
   } catch (error) {
     console.error('Complete step error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

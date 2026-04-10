@@ -46,7 +46,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
     departmentId: '',
     role: 'APPROVER' as const
   })
-  const [file, setFile] = useState<File | null>(null)
+  const [files, setFiles] = useState<File[]>([])
   const [dragActive, setDragActive] = useState(false)
   const [referenceFiles, setReferenceFiles] = useState<File[]>([])
   const [referenceDragActive, setReferenceDragActive] = useState(false)
@@ -146,16 +146,20 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
     e.stopPropagation()
     setDragActive(false)
 
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const droppedFile = e.dataTransfer.files[0]
-      setFile(droppedFile)
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      setFiles(prev => [...prev, ...Array.from(e.dataTransfer.files)])
     }
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0])
+    const picked = e.target.files
+    if (picked && picked.length > 0) {
+      setFiles(prev => [...prev, ...Array.from(picked)])
     }
+  }
+
+  const handleFileRemove = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index))
   }
 
   const handleReferenceDrag = (e: React.DragEvent) => {
@@ -198,7 +202,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
     }
 
     // File validation based on role
-    if (isDrafter && !file) {
+    if (isDrafter && files.length === 0) {
       setError('Initial document upload is required for DRAFTER role')
       sileo.error({ title: 'Upload is required for DRAFTER role' })
       return
@@ -214,9 +218,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
     const formDataToSend = new FormData()
     formDataToSend.append('title', formData.title)
     formDataToSend.append('type', formData.type)
-    if (file) {
-      formDataToSend.append('file', file)
-    }
+    files.forEach((f) => formDataToSend.append('files', f))
     if (referenceFiles.length > 0) {
       referenceFiles.forEach((refFile) => {
         formDataToSend.append('referenceFiles', refFile)
@@ -259,7 +261,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
       setFormData({ title: '', type: 'Proposal', departmentIds: [], priority: 'RESTRICTED', complianceType: '', deadline: '' })
       setTimelineSteps([])
       setStepToAdd({ departmentId: '', role: 'APPROVER' })
-      setFile(null)
+      setFiles([])
       setReferenceFiles([])
       setSelectedDepartments([])
       setIsDepartmentDropdownOpen(false)
@@ -328,8 +330,9 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
   }
 
   const getFileIcon = () => {
-    if (!file) return null
-    const ext = file.name.split('.').pop()?.toLowerCase()
+    const firstFile = files[0]
+    if (!firstFile) return null
+    const ext = firstFile.name.split('.').pop()?.toLowerCase()
     const iconClass = 'w-16 h-16'
 
     if (ext === 'pdf') {
@@ -678,29 +681,44 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
                   id="file"
                   onChange={handleFileChange}
                   className="hidden"
-                  accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  multiple
+                  accept=".docx,.pdf,.ppt,.pptx,.xls,.xlsx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 />
                 <label
                   htmlFor="file"
                   className="cursor-pointer block"
                 >
-                  {file ? (
-                    <div className="flex items-center justify-center space-x-4">
-                      {getFileIcon()}
-                      <div className="text-left">
-                        <p className="text-sm font-semibold text-gray-900">{file.name}</p>
-                        <p className="text-sm text-gray-500">{formatFileSize(file.size)}</p>
+                  {files.length > 0 ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-center space-x-2 text-sm text-gray-600">
+                        <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span>{files.length} file{files.length > 1 ? 's' : ''} selected</span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          setFile(null)
-                        }}
-                        className="ml-4 px-3 py-1 text-sm text-red-600 hover:text-red-800 border border-red-300 rounded hover:bg-red-50"
-                      >
-                        Remove
-                      </button>
+                      <div className="space-y-2 text-left max-h-40 overflow-y-auto">
+                        {files.map((f, idx) => (
+                          <div key={`${f.name}-${idx}`} className="flex items-center justify-between bg-gray-50 p-2 rounded-md">
+                            <div className="flex items-center space-x-2 min-w-0">
+                              {getFileIcon()}
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">{f.name}</p>
+                                <p className="text-xs text-gray-500">{formatFileSize(f.size)}</p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                handleFileRemove(idx)
+                              }}
+                              className="ml-2 px-2 py-1 text-xs text-red-600 hover:text-red-800 border border-red-300 rounded hover:bg-red-50 flex-shrink-0"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   ) : (
                     <div>
@@ -714,7 +732,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
                         browse to choose a file
                       </p>
                       <p className="text-xs text-gray-400 mt-1">
-                        Supported format: DOCX up to 10MB
+                        Supported formats: DOCX, PDF, PPT/PPTX, XLS/XLSX
                       </p>
                     </div>
                   )}
@@ -814,7 +832,7 @@ export function NewDocumentModal({ isOpen, onClose, onDocumentCreated }: NewDocu
               </button>
               <button
                 type="submit"
-                disabled={loading || (isDrafter && !file)}
+                disabled={loading || (isDrafter && files.length === 0)}
                 className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (

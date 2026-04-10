@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken, getTokenFromRequest } from '@/lib/auth'
-import { readFile } from 'fs/promises'
-import { join } from 'path'
+import { readStoredFile } from '@/lib/uploads'
 
 async function getUserFromRequest(request: NextRequest) {
   const token = getTokenFromRequest(request)
@@ -26,30 +25,49 @@ export async function GET(
 
     const { id } = await params
 
-    const version = await prisma.documentVersion.findUnique({
-      where: { id }
+    // Alias: download "current" (primary file in current revision, or latest legacy version).
+    const document = await prisma.document.findUnique({
+      where: { id },
+      select: { currentRevisionId: true },
     })
+    if (!document) return NextResponse.json({ error: 'Document not found' }, { status: 404 })
 
-    if (!version) {
-      return NextResponse.json({ error: 'Version not found' }, { status: 404 })
-    }
-
-    const fullPath = join(process.cwd(), 'public', version.filePath)
-
-    try {
-      const fileBuffer = await readFile(fullPath)
-
-      return new NextResponse(fileBuffer, {
-        headers: {
-          'Content-Type': version.mimeType,
-          'Content-Disposition': `attachment; filename="${version.fileName}"`,
-          'Content-Length': String(version.fileSize)
-        }
+    if (document.currentRevisionId) {
+      const revision = await prisma.documentRevision.findUnique({
+        where: { id: document.currentRevisionId },
+        include: { files: { orderBy: { createdAt: 'asc' } } },
       })
-    } catch (error) {
-      console.error('File not found:', error)
-      return NextResponse.json({ error: 'File not found' }, { status: 404 })
+      if (!revision) return NextResponse.json({ error: 'Current revision not found' }, { status: 404 })
+
+      const primary = revision.files.find((f: any) => f.isPrimary) ?? revision.files[0]
+      if (!primary) return NextResponse.json({ error: 'No files found in current revision' }, { status: 404 })
+
+      const fileBuffer = await readStoredFile(primary.storagePath)
+      const body = new Uint8Array(fileBuffer)
+      return new NextResponse(body, {
+        headers: {
+          'Content-Type': primary.mimeType,
+          'Content-Disposition': `attachment; filename="${primary.fileName}"`,
+          'Content-Length': String(primary.fileSize),
+        },
+      })
     }
+
+    const latestVersion = await prisma.documentVersion.findFirst({
+      where: { documentId: id },
+      orderBy: { versionNumber: 'desc' },
+    })
+    if (!latestVersion) return NextResponse.json({ error: 'File not found' }, { status: 404 })
+
+    const fileBuffer = await readStoredFile(latestVersion.filePath)
+    const body = new Uint8Array(fileBuffer)
+    return new NextResponse(body, {
+      headers: {
+        'Content-Type': latestVersion.mimeType,
+        'Content-Disposition': `attachment; filename="${latestVersion.fileName}"`,
+        'Content-Length': String(latestVersion.fileSize),
+      },
+    })
   } catch (error) {
     console.error('Download file error:', error)
     return NextResponse.json(

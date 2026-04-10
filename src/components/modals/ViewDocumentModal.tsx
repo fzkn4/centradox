@@ -34,6 +34,40 @@ interface DocumentVersion {
   }
 }
 
+interface DocumentFileAnnotation {
+  id: string
+  fileName: string
+  fileSize: number
+  mimeType: string
+  pageNumber: number
+  workflowStepId?: string | null
+  createdAt: string
+  createdById: string
+}
+
+interface DocumentFile {
+  id: string
+  fileName: string
+  fileSize: number
+  mimeType: string
+  isPrimary: boolean
+  createdAt: string
+  annotations?: DocumentFileAnnotation[]
+}
+
+interface DocumentRevision {
+  id: string
+  revisionNumber: number
+  createdAt: string
+  createdBy: {
+    id: string
+    username: string
+    name: string
+    role: string
+  }
+  files: DocumentFile[]
+}
+
 interface WorkflowStep {
   id: string
   stepOrder: number
@@ -98,8 +132,11 @@ interface DocumentData {
     mimeType: string
     filePath: string
   }[]
-  currentVersionId: string | null
-  versions: DocumentVersion[]
+  currentRevisionId: string | null
+  revisions: DocumentRevision[]
+  // Legacy (pre multi-file revisions)
+  currentVersionId?: string | null
+  versions?: DocumentVersion[]
   workflowInstances: WorkflowInstance[]
 }
 
@@ -116,11 +153,49 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<'details' | 'workflow' | 'versions' | 'complete' | 'preview'>('details')
 
+  const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(null)
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null)
+
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewType, setPreviewType] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [paginatedPreview, setPaginatedPreview] = useState<{
+    fileId: string
+    page: number
+    pages: number
+  } | null>(null)
   const docxContainerRef = useRef<HTMLDivElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const annotationPreviewUrlsRef = useRef<Record<string, string>>({})
+
+  const selectedRevision = useMemo(() => {
+    if (!doc) return null
+    return doc.revisions.find(r => r.id === selectedRevisionId) ?? doc.revisions[0] ?? null
+  }, [doc, selectedRevisionId])
+
+  const selectedFile = useMemo(() => {
+    if (!selectedRevision) return null
+    return (
+      selectedRevision.files.find(f => f.id === selectedFileId) ??
+      selectedRevision.files.find(f => f.isPrimary) ??
+      selectedRevision.files[0] ??
+      null
+    )
+  }, [selectedRevision, selectedFileId])
+
+  const versionHistoryCount = useMemo(() => {
+    if (!doc) return 0
+    return doc.revisions.length > 0
+      ? doc.revisions.length
+      : (doc.versions ?? []).filter((v: DocumentVersion) => v.mimeType !== 'image/png').length
+  }, [doc])
+
+  const totalAnnotationCount = useMemo(() => {
+    if (!doc) return 0
+    return doc.revisions.reduce((acc, rev) => {
+      return acc + rev.files.reduce((fAcc, f) => fAcc + (f.annotations?.length ?? 0), 0)
+    }, 0)
+  }, [doc])
 
   // Annotation states
   const [isAnnotating, setIsAnnotating] = useState(false)
@@ -139,6 +214,44 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
     const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}'><circle cx='${center}' cy='${center}' r='${radius}' fill='none' stroke='${color}' stroke-width='1.5'/><circle cx='${center}' cy='${center}' r='1' fill='${color}'/></svg>`
     return `url("data:image/svg+xml,${svg}") ${center} ${center}, crosshair`
   }, [strokeWidth, strokeColor, activeTool])
+
+  const allAnnotations = useMemo(() => {
+    if (!doc) return []
+    const annotations: (DocumentFileAnnotation & { fileId: string; fileName: string })[] = []
+    
+    // Collect from all revisions
+    doc.revisions.forEach(rev => {
+      rev.files.forEach(file => {
+        if (file.annotations) {
+          file.annotations.forEach(ann => {
+            annotations.push({ ...ann, fileId: file.id, fileName: file.fileName })
+          })
+        }
+      })
+    })
+
+    // Legacy (pre multi-file revisions)
+    if (doc.versions) {
+      doc.versions.forEach(v => {
+        // Versions didn't have nested annotations in the same way, 
+        // but if they exist in state we should include them.
+        // (Assuming version-based annotations use the same naming pattern if any)
+      })
+    }
+    
+    return annotations.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  }, [doc])
+
+  const currentRevisionForAction = useMemo(() => {
+    if (!doc) return null
+    return doc.revisions.find(r => r.id === doc.currentRevisionId) ?? doc.revisions[0] ?? null
+  }, [doc])
+
+  const actionAnnotations = useMemo(() => {
+    if (!currentRevisionForAction) return []
+    const fileIds = new Set(currentRevisionForAction.files.map((f) => f.id))
+    return allAnnotations.filter((ann) => fileIds.has(ann.fileId))
+  }, [allAnnotations, currentRevisionForAction])
 
   // Textbox states
   const [zoomLevel, setZoomLevel] = useState(1)
@@ -308,10 +421,13 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
   const [confidentialComment, setConfidentialComment] = useState('')
   const [confidentialCommentVisibleTo, setConfidentialCommentVisibleTo] = useState<string[]>([])
   
-  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [uploadFiles, setUploadFiles] = useState<File[]>([])
   const [dragActive, setDragActive] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [annotationPreviews, setAnnotationPreviews] = useState<Record<string, string>>({})
+  const [annotationBusy, setAnnotationBusy] = useState(false)
+  const [showAnnotationsPanel, setShowAnnotationsPanel] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
@@ -333,8 +449,10 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
     if (isOpen && documentId) {
       loadDocument()
       setActiveTab('details')
+      setSelectedRevisionId(null)
+      setSelectedFileId(null)
       setCompleteComment('')
-      setUploadFile(null)
+      setUploadFiles([])
       setSubmitError('')
       if (previewUrl) {
         window.URL.revokeObjectURL(previewUrl)
@@ -351,6 +469,13 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
       }
     }
   }, [previewUrl])
+
+  useEffect(() => {
+    // Clear cached annotation object URLs when switching files
+    Object.values(annotationPreviewUrlsRef.current).forEach((u) => window.URL.revokeObjectURL(u))
+    annotationPreviewUrlsRef.current = {}
+    setAnnotationPreviews({})
+  }, [selectedFileId])
 
   const loadDocument = async () => {
     if (!documentId) return
@@ -369,7 +494,20 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
       }
 
       const data = await response.json()
-      setDoc(data.document)
+      const nextDoc: DocumentData = data.document
+      setDoc(nextDoc)
+
+      // Initialize selection to the current revision + primary file (or first available)
+      const initialRevision =
+        nextDoc.revisions.find(r => r.id === nextDoc.currentRevisionId) ?? nextDoc.revisions[0] ?? null
+      if (initialRevision) {
+        setSelectedRevisionId(initialRevision.id)
+        const primary = initialRevision.files.find(f => f.isPrimary) ?? initialRevision.files[0] ?? null
+        setSelectedFileId(primary?.id ?? null)
+      } else {
+        setSelectedRevisionId(null)
+        setSelectedFileId(null)
+      }
     } catch (err) {
       setError('Failed to load document details')
       console.error('Failed to load document:', err)
@@ -379,7 +517,8 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
   }
 
   const handleDownloadCurrent = async () => {
-    if (!documentId || !doc?.currentVersionId) return
+    if (!documentId) return
+    if (!doc) return
 
     try {
       const response = await fetch(`/api/documents/${documentId}/download-current`, {
@@ -396,8 +535,13 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
       const url = window.URL.createObjectURL(blob)
       const a = window.document.createElement('a')
       a.href = url
-      const currentVersion = doc.versions.find((v: DocumentVersion) => v.id === doc.currentVersionId) || doc.versions[0]
-      a.download = currentVersion?.fileName || `document-${documentId}`
+      const currentRevision =
+        doc.revisions.find(r => r.id === doc.currentRevisionId) ?? doc.revisions[0] ?? null
+      const primaryFile =
+        currentRevision?.files.find(f => f.isPrimary) ?? currentRevision?.files[0] ?? null
+      const legacyVersion =
+        doc.versions?.find((v: DocumentVersion) => v.id === doc.currentVersionId) ?? doc.versions?.[0] ?? null
+      a.download = primaryFile?.fileName || legacyVersion?.fileName || `document-${documentId}`
       window.document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
@@ -439,21 +583,85 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
     }
   }
 
-  const handlePreview = async (versionId?: string) => {
+  const handlePreview = async (fileId?: string) => {
     if (!documentId) return
-    const targetVersionId = versionId || doc?.currentVersionId
-    if (!targetVersionId) return
+    const targetFileId = fileId || selectedFile?.id || null
 
     setPreviewLoading(true)
     try {
-      const endpoint = versionId 
-        ? `/api/documents/${documentId}/download/${versionId}`
+      const getExt = (name: string): string => {
+        const idx = name.lastIndexOf('.')
+        if (idx === -1) return ''
+        return name.slice(idx + 1).toLowerCase()
+      }
+
+      const findFileMetaById = (id: string): { fileName: string; mimeType: string } | null => {
+        if (!doc) return null
+        for (const rev of doc.revisions ?? []) {
+          const f = rev.files.find((x) => x.id === id)
+          if (f) return { fileName: f.fileName, mimeType: f.mimeType }
+        }
+        return null
+      }
+
+      const fileMeta = targetFileId ? findFileMetaById(targetFileId) : null
+      const effectiveFileName = fileMeta?.fileName ?? selectedFile?.fileName ?? ''
+      const effectiveExt = getExt(effectiveFileName)
+      const isOfficePreview = effectiveExt === 'ppt' || effectiveExt === 'pptx' || effectiveExt === 'xls' || effectiveExt === 'xlsx'
+
+      if (isAnnotating) {
+        setIsAnnotating(false)
+        setTextboxes([])
+        setSelectedTextboxId(null)
+        void canvasRef.current?.clearCanvas()
+      }
+
+      if (isOfficePreview && targetFileId) {
+        const infoRes = await fetch(`/api/documents/${documentId}/preview-info/${targetFileId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const infoPayload = await infoRes.json().catch(() => ({}))
+        if (!infoRes.ok) {
+          throw new Error(infoPayload?.error || 'Failed to load preview info')
+        }
+
+        const pages = Number(infoPayload?.pages)
+        if (!Number.isFinite(pages) || pages <= 0) {
+          throw new Error('Invalid preview info')
+        }
+
+        const imgRes = await fetch(`/api/documents/${documentId}/preview-image/${targetFileId}?page=1`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!imgRes.ok) {
+          const imgPayload = await imgRes.json().catch(() => ({}))
+          throw new Error(imgPayload?.error || 'Failed to load preview image')
+        }
+
+        const blob = await imgRes.blob()
+
+        if (previewUrl) {
+          window.URL.revokeObjectURL(previewUrl)
+        }
+
+        const url = window.URL.createObjectURL(blob)
+        setPreviewUrl(url)
+        setPreviewType(blob.type || 'image/png')
+        setPaginatedPreview({ fileId: targetFileId, page: 1, pages })
+        setActiveTab('preview')
+        return
+      }
+
+      setPaginatedPreview(null)
+
+      const endpoint = targetFileId
+        ? `/api/documents/${documentId}/download/${targetFileId}`
         : `/api/documents/${documentId}/download-current`
-        
+
       const response = await fetch(endpoint, {
         headers: {
-          Authorization: `Bearer ${token}`
-        }
+          Authorization: `Bearer ${token}`,
+        },
       })
 
       if (!response.ok) {
@@ -461,7 +669,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
       }
 
       const blob = await response.blob()
-      
+
       if (previewUrl) {
         window.URL.revokeObjectURL(previewUrl)
       }
@@ -478,10 +686,49 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
     }
   }
 
-  const handleSaveAnnotation = async () => {
-    if (!wrapperRef.current) return
+  const handleChangePaginatedPreviewPage = async (nextPage: number) => {
+    if (!documentId || !paginatedPreview) return
+    if (nextPage < 1 || nextPage > paginatedPreview.pages) return
+
     try {
-      setSubmitting(true)
+      setPreviewLoading(true)
+
+      if (isAnnotating) {
+        setIsAnnotating(false)
+        setTextboxes([])
+        setSelectedTextboxId(null)
+        void canvasRef.current?.clearCanvas()
+      }
+
+      const imgRes = await fetch(
+        `/api/documents/${documentId}/preview-image/${paginatedPreview.fileId}?page=${nextPage}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      if (!imgRes.ok) {
+        const imgPayload = await imgRes.json().catch(() => ({}))
+        throw new Error(imgPayload?.error || 'Failed to load preview image')
+      }
+      const blob = await imgRes.blob()
+
+      if (previewUrl) {
+        window.URL.revokeObjectURL(previewUrl)
+      }
+      const url = window.URL.createObjectURL(blob)
+      setPreviewUrl(url)
+      setPreviewType(blob.type || 'image/png')
+      setPaginatedPreview({ ...paginatedPreview, page: nextPage })
+    } catch (err) {
+      console.error('Failed to change preview page:', err)
+      sileo.error({ title: 'Failed to change preview page' })
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+  const handleSaveAnnotation = async () => {
+    if (!wrapperRef.current || !documentId || !selectedFile) return
+    try {
+      setAnnotationBusy(true)
       
       const dataUri = await toPng(wrapperRef.current, {
         pixelRatio: 2, // For better resolution/text clarity
@@ -498,20 +745,132 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
       }
       const blob = new Blob([ab], { type: mimeString })
       const file = new File([blob], `annotated-${documentId}.png`, { type: mimeString })
-      
-      setUploadFile(file)
+
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('pageNumber', (paginatedPreview?.fileId === selectedFile.id ? paginatedPreview?.page : 1).toString())
+
+      const res = await fetch(`/api/documents/${documentId}/files/${selectedFile.id}/annotations`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      })
+
+      const payload = await res.json()
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Failed to attach annotation')
+      }
+
       setIsAnnotating(false)
       setTextboxes([])
       setSelectedTextboxId(null)
-      setActiveTab('complete')
-      sileo.success({ title: 'Annotation captured! Add a comment and hit Take Action to submit.' })
+      await loadDocument()
+      sileo.success({ title: 'Annotation attached' })
     } catch (e) {
       console.error('Error saving annotation:', e)
-      sileo.error({ title: 'Failed to save annotation' })
+      sileo.error({ title: 'Failed to attach annotation' })
     } finally {
-      setSubmitting(false)
+      setAnnotationBusy(false)
     }
   }
+
+
+  const ensureAnnotationPreview = useCallback(
+    async (annotationId: string, fileId: string) => {
+      if (!documentId) return
+      if (annotationPreviewUrlsRef.current[annotationId]) return
+
+      try {
+        const res = await fetch(
+          `/api/documents/${documentId}/files/${fileId}/annotations/${annotationId}/download`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        if (!res.ok) return
+        const blob = await res.blob()
+        const url = window.URL.createObjectURL(blob)
+        annotationPreviewUrlsRef.current[annotationId] = url
+        setAnnotationPreviews((prev) => ({ ...prev, [annotationId]: url }))
+      } catch (e) {
+        console.error('Failed to fetch annotation preview:', e)
+      }
+    },
+    [documentId, token]
+  )
+
+  useEffect(() => {
+    if (!showAnnotationsPanel) return
+    if (allAnnotations.length === 0) return
+    // Prefetch a few thumbnails for better perceived performance.
+    allAnnotations.slice(0, 8).forEach((a) => {
+      void ensureAnnotationPreview(a.id, a.fileId)
+    })
+  }, [showAnnotationsPanel, allAnnotations, ensureAnnotationPreview])
+
+  useEffect(() => {
+    if (activeTab !== 'complete') return
+    if (actionAnnotations.length === 0) return
+    actionAnnotations.forEach((a) => {
+      void ensureAnnotationPreview(a.id, a.fileId)
+    })
+  }, [activeTab, actionAnnotations, ensureAnnotationPreview])
+
+  const handleDownloadAnnotation = useCallback(
+    async (annotationId: string, fileId: string, fileName: string) => {
+      if (!documentId) return
+      try {
+        const res = await fetch(
+          `/api/documents/${documentId}/files/${fileId}/annotations/${annotationId}/download`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        if (!res.ok) throw new Error('Failed to download annotation')
+        const blob = await res.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = window.document.createElement('a')
+        a.href = url
+        a.download = fileName || `annotation-${annotationId}.png`
+        window.document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        window.document.body.removeChild(a)
+      } catch (e) {
+        console.error('Failed to download annotation:', e)
+        sileo.error({ title: 'Failed to download annotation' })
+      }
+    },
+    [documentId, token]
+  )
+
+  const handleDeleteAnnotation = useCallback(
+    async (annotationId: string, fileId: string) => {
+      if (!documentId) return
+      try {
+        setAnnotationBusy(true)
+        const res = await fetch(
+          `/api/documents/${documentId}/files/${fileId}/annotations/${annotationId}`,
+          { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }
+        )
+        const payload = await res.json()
+        if (!res.ok) throw new Error(payload?.error || 'Failed to delete annotation')
+
+        const url = annotationPreviewUrlsRef.current[annotationId]
+        if (url) window.URL.revokeObjectURL(url)
+        delete annotationPreviewUrlsRef.current[annotationId]
+        setAnnotationPreviews((prev) => {
+          const { [annotationId]: _, ...rest } = prev
+          return rest
+        })
+
+        await loadDocument()
+        sileo.success({ title: 'Annotation deleted' })
+      } catch (e) {
+        console.error('Failed to delete annotation:', e)
+        sileo.error({ title: 'Failed to delete annotation' })
+      } finally {
+        setAnnotationBusy(false)
+      }
+    },
+    [documentId, token]
+  )
 
   const handleDownloadVersion = async (versionId: string, fileName: string) => {
     try {
@@ -545,13 +904,17 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
     setSubmitError('')
 
     // Comment is optional for regular DRAFTER steps, required for APPROVER steps, disapproval, or resolving CHANGES_REQUESTED
-    const isCommentRequired = actionType === 'disapprove-step' || currentWorkflowStep?.role === 'APPROVER' || (currentWorkflowStep?.role === 'DRAFTER' && doc?.currentStatus === 'CHANGES_REQUESTED')
+    const isCommentRequired =
+      actionType === 'disapprove-step' ||
+      currentWorkflowStep?.role === 'APPROVER' ||
+      (currentWorkflowStep?.role === 'DRAFTER' && doc?.currentStatus === 'CHANGES_REQUESTED') ||
+      (currentWorkflowStep?.role === 'DRAFTER' && user?.role === 'EDITOR')
     if (isCommentRequired && !completeComment.trim()) {
       setSubmitError('Please add a comment')
       return
     }
 
-    if (actionType === 'complete-step' && isCurrentStepRequiringFile && !uploadFile) {
+    if (actionType === 'complete-step' && isCurrentStepRequiringFile && uploadFiles.length === 0) {
       const roleName = 'draft'
       setSubmitError(`Document upload is required to submit ${roleName}`)
       return
@@ -568,8 +931,8 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
           formData.append('confidentialCommentVisibleTo', JSON.stringify(confidentialCommentVisibleTo))
         }
       }
-      if (uploadFile) {
-        formData.append('file', uploadFile)
+      if (uploadFiles.length > 0) {
+        uploadFiles.forEach((f) => formData.append('files', f))
       }
 
       const response = await fetch(`/api/documents/${documentId}/complete-step`, {
@@ -593,7 +956,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
       setIsConfidentialComment(false)
       setConfidentialComment('')
       setConfidentialCommentVisibleTo([])
-      setUploadFile(null)
+      setUploadFiles([])
       sileo.success({ title: actionType === 'disapprove-step' ? 'Document disapproved' : 'Step completed successfully' })
     } catch (err: any) {
       setSubmitError(err.message || 'Failed to complete step')
@@ -680,15 +1043,20 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
     e.stopPropagation()
     setDragActive(false)
 
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setUploadFile(e.dataTransfer.files[0])
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      setUploadFiles(prev => [...prev, ...Array.from(e.dataTransfer.files)])
     }
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setUploadFile(e.target.files[0])
+    const picked = e.target.files
+    if (picked && picked.length > 0) {
+      setUploadFiles(prev => [...prev, ...Array.from(picked)])
     }
+  }
+
+  const handleUploadFileRemove = (index: number) => {
+    setUploadFiles(prev => prev.filter((_, i) => i !== index))
   }
 
   const formatFileSize = (bytes: number) => {
@@ -773,13 +1141,19 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
   )
 
   const canCompleteStep = user?.role === 'ADMIN' || (
-    currentWorkflowStep?.role === user?.role && 
+    (
+      currentWorkflowStep?.role === user?.role ||
+      (currentWorkflowStep?.role === 'DRAFTER' && (user?.role === 'DRAFTER' || user?.role === 'EDITOR'))
+    ) &&
     (!currentWorkflowStep?.department?.id || user?.departmentIds?.includes(currentWorkflowStep.department.id))
   )
 
   const isCurrentStepDrafter = currentWorkflowStep?.role === 'DRAFTER'
   const isCurrentStepRequiringFile = isCurrentStepDrafter
-  const isCommentRequired = currentWorkflowStep?.role === 'APPROVER' || (isCurrentStepDrafter && doc?.currentStatus === 'CHANGES_REQUESTED')
+  const isCommentRequired =
+    currentWorkflowStep?.role === 'APPROVER' ||
+    (isCurrentStepDrafter && doc?.currentStatus === 'CHANGES_REQUESTED') ||
+    (isCurrentStepDrafter && user?.role === 'EDITOR')
   const showDisapproveOption = currentWorkflowStep?.role === 'APPROVER'
 
   const isDocumentComplete = doc?.currentStatus === 'APPROVED' || doc?.currentStatus === 'FINAL'
@@ -877,7 +1251,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                       : 'border-transparent text-gray-500 hover:text-gray-700'
                   }`}
                 >
-                  Version History ({doc.versions.filter((v: DocumentVersion) => v.mimeType !== 'image/png').length})
+                  Version History ({doc.revisions.length > 0 ? doc.revisions.length : (doc.versions ?? []).filter((v: DocumentVersion) => v.mimeType !== 'image/png').length})
                 </button>
                 {(previewUrl || previewLoading) && (
                   <button
@@ -983,7 +1357,11 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 uppercase tracking-wide">Versions</p>
-                        <p className="font-semibold text-gray-900">{doc.versions.filter((v: DocumentVersion) => v.mimeType !== 'image/png').length}</p>
+                        <p className="font-semibold text-gray-900">
+                          {doc.revisions.length > 0
+                            ? doc.revisions.length
+                            : (doc.versions ?? []).filter((v: DocumentVersion) => v.mimeType !== 'image/png').length}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -1116,7 +1494,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                       Complete Step
                     </button>
                   )}
-                  {doc.currentVersionId && (
+                  {(doc.currentRevisionId || doc.currentVersionId) && (
                     <>
                       <button
                         onClick={() => handlePreview()}
@@ -1250,6 +1628,41 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                             </div>
                           </div>
                         )}
+
+                        {/* Annotations for this step */}
+                        {(() => {
+                          const stepAnns = allAnnotations.filter(a => a.workflowStepId === step.id)
+                          if (stepAnns.length === 0) return null
+                          return (
+                            <div className="mt-3 space-y-2">
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Attached Annotations</p>
+                              <div className="flex flex-wrap gap-2">
+                                {stepAnns.map(ann => (
+                                  <button
+                                    key={ann.id}
+                                    type="button"
+                                    onClick={() => handleDownloadAnnotation(ann.id, ann.fileId, ann.fileName)}
+                                    className="group relative w-16 h-16 bg-gray-100 border border-gray-200 rounded overflow-hidden hover:border-indigo-300 transition-colors shadow-sm"
+                                    title={`Download: ${ann.fileName} (Page ${ann.pageNumber})`}
+                                  >
+                                    {annotationPreviews[ann.id] ? (
+                                      <img src={annotationPreviews[ann.id]} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200" />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center bg-gray-50">
+                                        <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                      </div>
+                                    )}
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                      <div className="bg-white/90 rounded px-1 py-0.5 text-[8px] font-bold text-gray-900 border border-gray-200 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                                        P{ann.pageNumber}
+                                      </div>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )
+                        })()}
                       </div>
                     </div>
                   ))}
@@ -1259,27 +1672,118 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
 
             {activeTab === 'preview' && previewUrl && (
               <div className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200 h-[85vh] flex flex-col">
-                <div className="p-3 bg-white border-b border-gray-200 flex justify-between items-center">
-                  <span className="text-sm font-medium text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis">
-                    Document Preview &middot; {previewType}
-                  </span>
-                  <div className="flex items-center space-x-4">
-                    {previewType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' && canCompleteStep && (
+                <div className="p-3 bg-white border-b border-gray-200 flex flex-col md:flex-row md:justify-between md:items-center gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis">
+                      Document Preview &middot; {previewType}
+                    </div>
+                    {selectedFile?.fileName && (
+                      <div className="text-xs text-gray-500 truncate">
+                        {selectedFile.fileName}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 md:gap-3 justify-end">
+                    {doc.revisions.length > 0 && (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Revision</label>
+                          <select
+                            value={selectedRevision?.id ?? ''}
+                            onChange={(e) => {
+                              const revId = e.target.value
+                              setSelectedRevisionId(revId)
+                              const rev = doc.revisions.find((r) => r.id === revId) ?? null
+                              const primary = rev?.files.find((f) => f.isPrimary) ?? rev?.files[0] ?? null
+                              setSelectedFileId(primary?.id ?? null)
+                              if (primary) void handlePreview(primary.id)
+                            }}
+                            className="text-sm border border-gray-300 rounded-md px-2 py-1 bg-white text-gray-900"
+                          >
+                            {doc.revisions.map((r) => (
+                              <option key={r.id} value={r.id} className="text-gray-900">
+                                Rev {r.revisionNumber}{r.id === doc.currentRevisionId ? ' (Current)' : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">File</label>
+                          <select
+                            value={selectedFile?.id ?? ''}
+                            onChange={(e) => {
+                              const fileId = e.target.value
+                              setSelectedFileId(fileId)
+                              void handlePreview(fileId)
+                            }}
+                            className="text-sm border border-gray-300 rounded-md px-2 py-1 bg-white max-w-[16rem] text-gray-900"
+                          >
+                            {(selectedRevision?.files ?? []).map((f) => (
+                              <option key={f.id} value={f.id} className="text-gray-900">
+                                {f.isPrimary ? '[Primary] ' : ''}{f.fileName}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {paginatedPreview && (
+                          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-md px-2 py-1">
+                            <button
+                              type="button"
+                              onClick={() => void handleChangePaginatedPreviewPage(paginatedPreview.page - 1)}
+                              disabled={previewLoading || paginatedPreview.page <= 1}
+                              className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:hover:bg-white"
+                            >
+                              Prev
+                            </button>
+                            <span className="text-xs text-gray-700 tabular-nums">
+                              Page {paginatedPreview.page} / {paginatedPreview.pages}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => void handleChangePaginatedPreviewPage(paginatedPreview.page + 1)}
+                              disabled={previewLoading || paginatedPreview.page >= paginatedPreview.pages}
+                              className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:hover:bg-white"
+                            >
+                              Next
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => setShowAnnotationsPanel((v) => !v)}
+                      className={`text-sm px-3 py-1.5 rounded-md font-medium border transition-colors ${
+                        showAnnotationsPanel ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      }`}
+                      title="View document wide annotations"
+                    >
+                      Annotations ({allAnnotations.length})
+                    </button>
+
+                    {(previewType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || previewType?.startsWith('image/')) && canCompleteStep && (
                       <button
                         onClick={() => {
-                          const newState = !isAnnotating;
-                          setIsAnnotating(newState);
+                          const newState = !isAnnotating
+                          setIsAnnotating(newState)
                           if (!newState) {
-                            setActiveTool('draw');
-                            setZoomLevel(1);
+                            setActiveTool('draw')
+                            setZoomLevel(1)
                           }
                         }}
-                        className={`text-sm px-3 py-1.5 rounded-md font-medium transition-colors ${isAnnotating ? 'bg-indigo-600 text-white shadow-sm' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'}`}
+                        className={`text-sm px-3 py-1.5 rounded-md font-medium transition-colors ${
+                          isAnnotating ? 'bg-indigo-600 text-white shadow-sm' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                        }`}
                       >
                         {isAnnotating ? 'Exit Annotation' : 'Draw Annotation'}
                       </button>
                     )}
-                    <button 
+
+                    <button
                       onClick={() => setActiveTab('details')}
                       className="text-sm text-gray-600 hover:text-gray-900"
                     >
@@ -1361,29 +1865,34 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                       <button onClick={() => canvasRef.current?.clearCanvas()} className="text-sm px-3 py-1.5 text-red-600 bg-white border border-red-200 hover:bg-red-50 rounded flex-1 md:flex-none">Clear</button>
                       <button 
                         onClick={handleSaveAnnotation} 
-                        disabled={submitting}
+                        disabled={annotationBusy}
                         className="text-sm px-4 py-1.5 text-white bg-indigo-600 hover:bg-indigo-700 rounded shadow-sm font-medium flex items-center justify-center w-full md:w-auto mt-2 md:mt-0"
                       >
-                        {submitting ? 'Saving...' : 'Attach Annotation'}
+                        {annotationBusy ? 'Saving...' : 'Attach Annotation'}
                       </button>
                     </div>
                   </div>
                 )}
 
                 <div className="flex-1 w-full flex items-center justify-center bg-gray-100 overflow-auto relative">
-                  {previewType?.startsWith('image/') ? (
-                    <img src={previewUrl} alt="Document Preview" className="max-w-full max-h-full object-contain shadow-sm bg-white" />
-                  ) : previewType === 'application/pdf' ? (
+                  {previewType === 'application/pdf' ? (
                     <object data={previewUrl} type="application/pdf" className="w-full h-full shadow-sm">
                       <iframe src={previewUrl} className="w-full h-full border-0">
                         <p>This browser does not support PDFs. Please download the PDF to view it.</p>
                       </iframe>
                     </object>
-                  ) : previewType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ? (
+                  ) : (previewType?.startsWith('image/') || previewType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') ? (
                     <div style={{ position: 'relative', width: '100%', height: '100%', border: '1px solid #ddd', backgroundColor: '#f3f4f6', overflowY: 'auto', overflowX: 'auto' }}>
                       <div 
                         ref={wrapperRef} 
-                        style={{ position: 'relative', minWidth: '100%', minHeight: '100%', width: 'fit-content', transform: `scale(${zoomLevel})`, transformOrigin: 'top left', cursor: isAnnotating ? (activeTool === 'draw' || activeTool === 'erase' ? circleCursor : activeTool === 'pan' ? 'grab' : activeTool === 'text' ? 'text' : 'default') : 'default' }}
+                        style={{
+                          position: 'relative',
+                          ...(previewType?.startsWith('image/') ? {} : { minWidth: '100%', minHeight: '100%' }),
+                          width: 'fit-content',
+                          transform: `scale(${zoomLevel})`,
+                          transformOrigin: 'top left',
+                          cursor: isAnnotating ? (activeTool === 'draw' || activeTool === 'erase' ? circleCursor : activeTool === 'pan' ? 'grab' : activeTool === 'text' ? 'text' : 'default') : 'default'
+                        }}
                         onMouseDown={handleWrapperMouseDown}
                         onMouseMove={handleWrapperMouseMove}
                         onMouseUp={endDrag}
@@ -1391,7 +1900,16 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                         onTouchEnd={endDrag}
                         onClick={handleWrapperClick}
                       >
-                        <div ref={docxContainerRef} className="docx-preview-container select-none" />
+                        {previewType?.startsWith('image/') ? (
+                          <img
+                            src={previewUrl}
+                            alt="Document Preview"
+                            className="block max-w-none shadow-sm bg-white select-none"
+                            draggable={false}
+                          />
+                        ) : (
+                          <div ref={docxContainerRef} className="docx-preview-container select-none" />
+                        )}
                         {isAnnotating && (
                           <>
                             <div className={`absolute top-0 left-0 w-full h-full z-10 ${activeTool === 'pan' ? '' : 'touch-none'}`} style={{ pointerEvents: (activeTool === 'pan' || activeTool === 'text') ? 'none' : 'auto', cursor: activeTool === 'draw' || activeTool === 'erase' ? circleCursor : 'default' }}>
@@ -1494,80 +2012,256 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                       </p>
                     </div>
                   )}
+
+                  {showAnnotationsPanel && (
+                    <div className="absolute top-0 right-0 h-full w-full sm:w-96 bg-white border-l border-gray-200 shadow-2xl z-30 flex flex-col">
+                      <div className="p-3 border-b border-gray-200 flex items-center justify-between">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 truncate">
+                            Document Annotations ({allAnnotations.length})
+                          </p>
+                          <p className="text-[11px] text-gray-500 truncate">
+                            Centralized aggregate view
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowAnnotationsPanel(false)}
+                          className="text-gray-400 hover:text-gray-700 p-1 rounded hover:bg-gray-100"
+                          title="Close annotations"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+
+                      <div className="p-3 overflow-y-auto space-y-3">
+                        {allAnnotations.length === 0 ? (
+                          <div className="text-sm text-gray-600">
+                            No annotations attached to this document.
+                          </div>
+                        ) : (
+                          allAnnotations.map((ann) => (
+                            <div key={ann.id} className="border border-gray-200 rounded-lg p-2 bg-white">
+                              <div className="flex gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDownloadAnnotation(ann.id, ann.fileId, ann.fileName)}
+                                  className="w-20 h-16 bg-gray-50 border border-gray-200 rounded overflow-hidden flex items-center justify-center flex-shrink-0 hover:bg-gray-100"
+                                  title="Download annotation"
+                                >
+                                  {annotationPreviews[ann.id] ? (
+                                    <img
+                                      src={annotationPreviews[ann.id]}
+                                      alt={ann.fileName}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <span className="text-[10px] text-gray-500">Loading...</span>
+                                  )}
+                                </button>
+
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="text-sm font-semibold text-gray-900 truncate">{ann.fileName}</p>
+                                    {selectedFile?.id === ann.fileId && (
+                                       <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1 py-0.5 rounded border border-indigo-100 flex-shrink-0">Current File</span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <p className="text-[10px] text-gray-500 truncate" title={`File: ${ann.fileName}`}>
+                                      Source: {ann.fileName}
+                                    </p>
+                                    <span className="text-[10px] bg-gray-100 text-gray-600 px-1 py-0.5 rounded border border-gray-200">Page {ann.pageNumber}</span>
+                                    {paginatedPreview?.fileId === ann.fileId && paginatedPreview?.page === ann.pageNumber && (
+                                       <span className="text-[10px] bg-green-50 text-green-700 px-1 py-0.5 rounded border border-green-100 flex-shrink-0">Current Page</span>
+                                    )}
+                                  </div>
+                                  <p className="text-[10px] text-gray-500">
+                                    {format(new Date(ann.createdAt), 'MMM dd, yyyy HH:mm')}
+                                    {ann.createdById === user?.id ? ' · You' : ''}
+                                  </p>
+
+                                  <div className="mt-2 flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDownloadAnnotation(ann.id, ann.fileId, ann.fileName)}
+                                      className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 underline"
+                                    >
+                                      Download
+                                    </button>
+                                    <span className="text-gray-300">|</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteAnnotation(ann.id, ann.fileId)}
+                                      disabled={annotationBusy}
+                                      className="text-xs font-semibold text-red-600 hover:text-red-700 underline disabled:opacity-50"
+                                    >
+                                      {annotationBusy ? 'Working...' : 'Delete'}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
             {activeTab === 'versions' && (
-              <div className="bg-gray-50 rounded-lg overflow-x-auto overflow-y-hidden shadow-inner">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-100">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Version
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        File Name
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Size
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Created By
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Date
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {doc.versions.filter((v: DocumentVersion) => v.mimeType !== 'image/png').map((version: DocumentVersion) => (
-                      <tr key={version.id} className={version.id === doc.currentVersionId ? 'bg-indigo-50' : ''}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-md ${
-                            version.id === doc.currentVersionId
-                              ? 'bg-indigo-100 text-indigo-800'
-                              : 'bg-gray-100 text-gray-700'
-                          }`}>
-                            {version.versionNumber}
-                            {version.id === doc.currentVersionId && (
-                              <span className="ml-2 text-indigo-600">(Current)</span>
-                            )}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {version.fileName}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {formatFileSize(version.fileSize)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {version.createdBy.name}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {format(new Date(version.createdAt), 'MMM dd, yyyy')}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
-                          <button
-                            onClick={() => handlePreview(version.id)}
-                            className="text-indigo-600 hover:text-indigo-900 font-medium"
-                          >
-                            Preview
-                          </button>
-                          <button
-                            onClick={() => handleDownloadVersion(version.id, version.fileName)}
-                            className="text-gray-600 hover:text-gray-900 font-medium"
-                          >
-                            Download
-                          </button>
-                        </td>
-                      </tr>
+              <div className="space-y-3">
+                {doc.revisions.length > 0 ? (
+                  <div className="space-y-3">
+                    {doc.revisions.map((rev) => (
+                      <details
+                        key={rev.id}
+                        className={`bg-white border rounded-lg shadow-sm overflow-hidden ${
+                          rev.id === doc.currentRevisionId ? 'border-indigo-300' : 'border-gray-200'
+                        }`}
+                      >
+                        <summary className="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-md ${
+                                rev.id === doc.currentRevisionId ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-700'
+                              }`}>
+                                Rev {rev.revisionNumber}
+                                {rev.id === doc.currentRevisionId && <span className="ml-2">(Current)</span>}
+                              </span>
+                              <span className="text-sm font-semibold text-gray-900 truncate">
+                                {rev.createdBy?.name ?? 'Unknown'}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {format(new Date(rev.createdAt), 'MMM dd, yyyy HH:mm')}
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {rev.files.length} file{rev.files.length === 1 ? '' : 's'}
+                            </p>
+                          </div>
+                          <span className="text-xs text-gray-500">Toggle</span>
+                        </summary>
+
+                        <div className="border-t border-gray-100 px-4 py-3 bg-gray-50 overflow-x-auto">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-100">
+                              <tr>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">File</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Annotations</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {rev.files.map((f) => (
+                                <tr key={f.id}>
+                                  <td className="px-4 py-3 text-sm text-gray-900">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="truncate">{f.fileName}</span>
+                                      {f.isPrimary && (
+                                        <span className="text-[11px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                          Primary
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-gray-500">{formatFileSize(f.fileSize)}</td>
+                                  <td className="px-4 py-3 text-sm text-gray-500">{f.annotations?.length ?? 0}</td>
+                                  <td className="px-4 py-3 text-sm font-medium space-x-3 whitespace-nowrap">
+                                    <button
+                                      onClick={() => handlePreview(f.id)}
+                                      className="text-indigo-600 hover:text-indigo-900 font-medium"
+                                    >
+                                      Preview
+                                    </button>
+                                    <button
+                                      onClick={() => handleDownloadVersion(f.id, f.fileName)}
+                                      className="text-gray-700 hover:text-gray-900 font-medium"
+                                    >
+                                      Download
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </details>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 rounded-lg overflow-x-auto overflow-y-hidden shadow-inner">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-100">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Version
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            File Name
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Size
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Created By
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Date
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {(doc.versions ?? [])
+                          .filter((v: DocumentVersion) => v.mimeType !== 'image/png')
+                          .map((version: DocumentVersion) => (
+                            <tr key={version.id} className={version.id === doc.currentVersionId ? 'bg-indigo-50' : ''}>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-md ${
+                                  version.id === doc.currentVersionId
+                                    ? 'bg-indigo-100 text-indigo-800'
+                                    : 'bg-gray-100 text-gray-700'
+                                }`}>
+                                  {version.versionNumber}
+                                  {version.id === doc.currentVersionId && (
+                                    <span className="ml-2 text-indigo-600">(Current)</span>
+                                  )}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{version.fileName}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatFileSize(version.fileSize)}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{version.createdBy.name}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {format(new Date(version.createdAt), 'MMM dd, yyyy')}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
+                                <button
+                                  onClick={() => handlePreview(version.id)}
+                                  className="text-indigo-600 hover:text-indigo-900 font-medium"
+                                >
+                                  Preview
+                                </button>
+                                <button
+                                  onClick={() => handleDownloadVersion(version.id, version.fileName)}
+                                  className="text-gray-600 hover:text-gray-900 font-medium"
+                                >
+                                  Download
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1599,31 +2293,71 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                     <div
                       className={`mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed rounded-lg transition-all ${
                         dragActive ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 hover:border-indigo-400'
-                      } ${uploadFile ? 'border-green-500 bg-green-50' : ''}`}
+                      } ${uploadFiles.length > 0 ? 'border-green-500 bg-green-50' : ''}`}
                       onDragEnter={handleDrag}
                       onDragLeave={handleDrag}
                       onDragOver={handleDrag}
                       onDrop={handleDrop}
                     >
                       <div className="space-y-1 text-center">
-                        {uploadFile ? (
-                          <div className="flex items-center justify-center space-x-3">
-                            <svg className="w-12 h-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <div className="text-left">
-                              <p className="text-sm font-medium text-gray-900">{uploadFile.name}</p>
-                              <p className="text-xs text-gray-500">{formatFileSize(uploadFile.size)}</p>
+                        {uploadFiles.length > 0 ? (
+                          <div className="w-full max-w-lg mx-auto space-y-2 text-left">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <p className="text-sm font-semibold text-gray-900">
+                                  {uploadFiles.length} file{uploadFiles.length === 1 ? '' : 's'} selected
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setUploadFiles([])}
+                                className="text-xs font-semibold text-red-600 hover:text-red-700 underline"
+                              >
+                                Clear all
+                              </button>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => setUploadFile(null)}
-                              className="text-red-500 hover:text-red-700"
-                            >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
+
+                            <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
+                              {uploadFiles.map((f, idx) => (
+                                <div key={`${f.name}-${f.size}-${idx}`} className="flex items-center justify-between gap-3 bg-white/80 border border-green-200 rounded-md px-3 py-2">
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium text-gray-900 truncate">{f.name}</p>
+                                    <p className="text-xs text-gray-500">{formatFileSize(f.size)}</p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUploadFileRemove(idx)}
+                                    className="text-red-500 hover:text-red-700 flex-shrink-0"
+                                    title="Remove file"
+                                  >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+
+                            <p className="text-xs text-gray-500">
+                              Add more by dragging here, or use the picker below.
+                            </p>
+
+                            <div className="flex items-center justify-center">
+                              <label htmlFor="file-upload" className="cursor-pointer text-sm font-medium text-indigo-600 hover:text-indigo-500">
+                                Add more files
+                                <input
+                                  id="file-upload"
+                                  type="file"
+                                  className="sr-only"
+                                  onChange={handleFileChange}
+                                  multiple
+                                  accept=".docx,.pdf,.ppt,.pptx,.xls,.xlsx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                />
+                              </label>
+                            </div>
                           </div>
                         ) : (
                           <>
@@ -1633,11 +2367,18 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                             <div className="flex text-sm text-gray-600">
                               <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none">
                                 <span>Upload a file</span>
-                                <input id="file-upload" type="file" className="sr-only" onChange={handleFileChange} accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+                                <input
+                                  id="file-upload"
+                                  type="file"
+                                  className="sr-only"
+                                  onChange={handleFileChange}
+                                  multiple
+                                  accept=".docx,.pdf,.ppt,.pptx,.xls,.xlsx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                />
                               </label>
                               <p className="pl-1">or drag and drop</p>
                             </div>
-                            <p className="text-xs text-gray-500">DOCX up to 10MB</p>
+                            <p className="text-xs text-gray-500">DOCX, PDF, PPT/PPTX, XLS/XLSX (multiple allowed)</p>
                           </>
                         )}
                       </div>
@@ -1748,6 +2489,82 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                   )}
                 </div>
 
+                <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <svg className="w-5 h-5 text-indigo-700 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828L18 9.828a4 4 0 00-5.656-5.656L6.757 9.757a6 6 0 108.486 8.486L20 13" />
+                    </svg>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-sm font-semibold text-indigo-900">
+                        Attached annotations ({actionAnnotations.length})
+                      </h4>
+                      <p className="text-xs text-indigo-800 mt-1">
+                        These annotations are already attached to the current document files and will remain available after you {showDisapproveOption ? 'approve/disapprove' : 'complete'} this step.
+                      </p>
+                      {isCurrentStepRequiringFile && uploadFiles.length > 0 && (
+                        <p className="text-[11px] text-indigo-700 mt-1">
+                          Note: annotations are tied to existing files; newly uploaded files won’t have annotations until you add them.
+                        </p>
+                      )}
+
+                      {actionAnnotations.length === 0 ? (
+                        <p className="text-sm text-indigo-900/80 mt-3">
+                          No annotations attached yet.
+                        </p>
+                      ) : (
+                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {actionAnnotations.map((ann) => (
+                            <div key={ann.id} className="bg-white border border-indigo-100 rounded-lg p-2 flex gap-3">
+                              <button
+                                type="button"
+                                onClick={() => handleDownloadAnnotation(ann.id, ann.fileId, `annotation-${ann.fileId}.png`)}
+                                className="w-20 h-16 bg-gray-50 border border-gray-200 rounded overflow-hidden flex items-center justify-center flex-shrink-0 hover:bg-gray-100"
+                                title="Download annotation"
+                              >
+                                {annotationPreviews[ann.id] ? (
+                                  <img
+                                    src={annotationPreviews[ann.id]}
+                                    alt={ann.fileName}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <span className="text-[10px] text-gray-500">Loading...</span>
+                                )}
+                              </button>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-semibold text-gray-900 truncate" title={ann.fileName}>
+                                  {ann.fileName} · <span className="text-indigo-600">Page {ann.pageNumber}</span>
+                                </p>
+                                <p className="text-[10px] text-gray-500 mt-0.5">
+                                  {format(new Date(ann.createdAt), 'MMM dd, yyyy HH:mm')}
+                                  {ann.createdById === user?.id ? ' · You' : ''}
+                                </p>
+                                <div className="mt-2 flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadAnnotation(ann.id, ann.fileId, `annotation-${ann.fileId}.png`)}
+                                    className="text-[11px] font-semibold text-indigo-700 hover:text-indigo-800 underline"
+                                  >
+                                    Download
+                                  </button>
+                                  <span className="text-gray-300">|</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowAnnotationsPanel(true)}
+                                    className="text-[11px] font-semibold text-gray-700 hover:text-gray-900 underline"
+                                  >
+                                    View all
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 {submitError && (
                   <div className="bg-red-50 text-red-800 p-3 rounded-md text-sm">
                     {submitError}
@@ -1830,7 +2647,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                 <ul className="text-sm text-amber-700 space-y-1">
                   <li className="flex items-center gap-2">
                     <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
-                    All document versions ({doc?.versions.filter(v => v.mimeType !== 'image/png').length || 0})
+                    All document versions ({versionHistoryCount})
                   </li>
                   <li className="flex items-center gap-2">
                     <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
@@ -1914,11 +2731,11 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                 <ul className="text-sm text-red-700 space-y-1">
                   <li className="flex items-center gap-2">
                     <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
-                    All document versions ({doc?.versions.filter(v => v.mimeType !== 'image/png').length || 0})
+                    All document versions ({versionHistoryCount})
                   </li>
                   <li className="flex items-center gap-2">
                     <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
-                    All drawing annotations
+                    All drawing annotations ({totalAnnotationCount})
                   </li>
                   <li className="flex items-center gap-2">
                     <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>

@@ -5,14 +5,14 @@
     "dev": "node server.mjs",
     "build": "next build",
     "start": "NODE_ENV=production node server.mjs",
-    "lint": "next lint",
+    "lint": "eslint .",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
-    "@cyntler/react-doc-viewer": "^1.17.1",
+    "@cyntler/react-doc-viewer": "^1.14.1",
     "@heroicons/react": "^2.2.0",
     "@prisma/client": "^6.19.1",
     "@tailwindcss/postcss": "^4.1.18",

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken, getTokenFromRequest } from '@/lib/auth'
-import { readFile } from 'fs/promises'
-import { join } from 'path'
+import { readStoredFile } from '@/lib/uploads'
 
 async function getUserFromRequest(request: NextRequest) {
   const token = getTokenFromRequest(request)
@@ -26,29 +25,52 @@ export async function GET(
 
     const { id, versionId } = await params
 
-    const version = await prisma.documentVersion.findUnique({
-      where: { id: versionId }
+    const file = await prisma.documentFile.findUnique({
+      where: { id: versionId },
+      include: {
+        revision: { select: { documentId: true } },
+      },
     })
 
+    if (file) {
+      if (file.revision.documentId !== id) {
+        return NextResponse.json({ error: 'File does not belong to this document' }, { status: 403 })
+      }
+
+      try {
+        const fileBuffer = await readStoredFile(file.storagePath)
+        const body = new Uint8Array(fileBuffer)
+        return new NextResponse(body, {
+          headers: {
+            'Content-Type': file.mimeType,
+            'Content-Disposition': `attachment; filename="${file.fileName}"`,
+            'Content-Length': String(file.fileSize),
+          },
+        })
+      } catch (error) {
+        console.error('File not found:', error)
+        return NextResponse.json({ error: 'File not found' }, { status: 404 })
+      }
+    }
+
+    // Legacy fallback
+    const version = await prisma.documentVersion.findUnique({ where: { id: versionId } })
     if (!version) {
-      return NextResponse.json({ error: 'Version not found' }, { status: 404 })
+      return NextResponse.json({ error: 'File not found' }, { status: 404 })
     }
-
     if (version.documentId !== id) {
-      return NextResponse.json({ error: 'Version does not belong to this document' }, { status: 403 })
+      return NextResponse.json({ error: 'File does not belong to this document' }, { status: 403 })
     }
-
-    const fullPath = join(process.cwd(), 'public', version.filePath)
 
     try {
-      const fileBuffer = await readFile(fullPath)
-
-      return new NextResponse(fileBuffer, {
+      const fileBuffer = await readStoredFile(version.filePath)
+      const body = new Uint8Array(fileBuffer)
+      return new NextResponse(body, {
         headers: {
           'Content-Type': version.mimeType,
           'Content-Disposition': `attachment; filename="${version.fileName}"`,
-          'Content-Length': String(version.fileSize)
-        }
+          'Content-Length': String(version.fileSize),
+        },
       })
     } catch (error) {
       console.error('File not found:', error)

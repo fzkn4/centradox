@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken, getTokenFromRequest } from '@/lib/auth'
-import { readFile } from 'fs/promises'
-import { join } from 'path'
+import { readStoredFile } from '@/lib/uploads'
 
 async function getUserFromRequest(request: NextRequest) {
   const token = getTokenFromRequest(request)
@@ -29,7 +28,7 @@ export async function GET(
     const document = await prisma.document.findUnique({
       where: { id },
       select: {
-        currentVersionId: true
+        currentRevisionId: true,
       }
     })
 
@@ -37,28 +36,52 @@ export async function GET(
       return NextResponse.json({ error: 'Document not found' }, { status: 404 })
     }
 
-    if (!document.currentVersionId) {
-      return NextResponse.json({ error: 'No current version available' }, { status: 404 })
+    if (!document.currentRevisionId) {
+      // Legacy fallback: serve most recent DocumentVersion (pre revisions).
+      const latestVersion = await prisma.documentVersion.findFirst({
+        where: { documentId: id },
+        orderBy: { versionNumber: 'desc' },
+      })
+      if (!latestVersion) {
+        return NextResponse.json({ error: 'No current revision available' }, { status: 404 })
+      }
+
+      const fileBuffer = await readStoredFile(latestVersion.filePath)
+      const body = new Uint8Array(fileBuffer)
+      return new NextResponse(body, {
+        headers: {
+          'Content-Type': latestVersion.mimeType,
+          'Content-Disposition': `attachment; filename="${latestVersion.fileName}"`,
+          'Content-Length': String(latestVersion.fileSize),
+        },
+      })
     }
 
-    const version = await prisma.documentVersion.findUnique({
-      where: { id: document.currentVersionId }
+    const revision = await prisma.documentRevision.findUnique({
+      where: { id: document.currentRevisionId },
+      include: {
+        files: { orderBy: { createdAt: 'asc' } },
+      },
     })
 
-    if (!version) {
-      return NextResponse.json({ error: 'Current version not found' }, { status: 404 })
+    if (!revision) {
+      return NextResponse.json({ error: 'Current revision not found' }, { status: 404 })
     }
 
-    const fullPath = join(process.cwd(), 'public', version.filePath)
+    const primary = revision.files.find((f: any) => f.isPrimary) ?? revision.files[0]
+    if (!primary) {
+      return NextResponse.json({ error: 'No files found in current revision' }, { status: 404 })
+    }
 
     try {
-      const fileBuffer = await readFile(fullPath)
+      const fileBuffer = await readStoredFile(primary.storagePath)
+      const body = new Uint8Array(fileBuffer)
 
-      return new NextResponse(fileBuffer, {
+      return new NextResponse(body, {
         headers: {
-          'Content-Type': version.mimeType,
-          'Content-Disposition': `attachment; filename="${version.fileName}"`,
-          'Content-Length': String(version.fileSize)
+          'Content-Type': primary.mimeType,
+          'Content-Disposition': `attachment; filename="${primary.fileName}"`,
+          'Content-Length': String(primary.fileSize)
         }
       })
     } catch (error) {

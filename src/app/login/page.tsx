@@ -85,7 +85,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6" data-bwignore="true">
             <div>
               <label
                 htmlFor="username"
@@ -93,7 +93,7 @@ export default function LoginPage() {
               >
                 Username
               </label>
-              <div className="relative">
+              <div className="relative" key="username-input">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <svg
                     className="h-5 w-5 text-gray-400"
@@ -112,6 +112,8 @@ export default function LoginPage() {
                 <input
                   id="username"
                   type="text"
+                  name="username"
+                  autoComplete="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   required
@@ -128,7 +130,7 @@ export default function LoginPage() {
               >
                 Password
               </label>
-              <div className="relative">
+              <div className="relative" key="password-input">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <svg
                     className="h-5 w-5 text-gray-400"
@@ -146,7 +148,9 @@ export default function LoginPage() {
                 </div>
                 <input
                   id="password"
+                  name="password"
                   type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required

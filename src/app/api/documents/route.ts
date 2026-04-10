@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken, getTokenFromRequest } from '@/lib/auth'
-import { writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
-import { existsSync } from 'fs'
+import { assertAllowedDocumentFile, saveUploadedFile } from '@/lib/uploads'
 
 async function getUserFromRequest(request: NextRequest) {
   const token = getTokenFromRequest(request)
@@ -13,31 +11,6 @@ async function getUserFromRequest(request: NextRequest) {
   if (!payload) return null
 
   return payload
-}
-
-async function ensureUploadsDir() {
-  const uploadsDir = join(process.cwd(), 'public', 'uploads')
-  if (!existsSync(uploadsDir)) {
-    await mkdir(uploadsDir, { recursive: true })
-  }
-  return uploadsDir
-}
-
-async function saveFile(file: File): Promise<{ filePath: string; fileName: string; fileSize: number; mimeType: string }> {
-  const uploadsDir = await ensureUploadsDir()
-  const bytes = await file.arrayBuffer()
-  const buffer = Buffer.from(bytes)
-  const uniqueFileName = `${Date.now()}-${file.name}`
-  const filePath = join(uploadsDir, uniqueFileName)
-
-  await writeFile(filePath, buffer)
-
-  return {
-    filePath: `/uploads/${uniqueFileName}`,
-    fileName: file.name,
-    fileSize: buffer.length,
-    mimeType: file.type
-  }
 }
 
 export async function GET(request: NextRequest) {
@@ -234,7 +207,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData()
     const title = formData.get('title') as string
     const type = formData.get('type') as string
-    const file = formData.get('file') as File | null
+    const files = formData.getAll('files') as File[]
     const referenceFiles = formData.getAll('referenceFiles') as File[]
     const departmentIds = formData.get('departmentIds') as string | null
     const priority = formData.get('priority') as string
@@ -253,18 +226,17 @@ export async function POST(request: NextRequest) {
     // If user is not DRAFTER, file upload is optional but workflow must start with DRAFTER
     const isDrafter = user.role === 'DRAFTER'
 
-    if (isDrafter && !file) {
+    if (isDrafter && files.length === 0) {
       return NextResponse.json(
         { error: 'Initial document upload is required for DRAFTER role' },
         { status: 400 }
       )
     }
 
-    if (file && !file.name.toLowerCase().endsWith('.docx')) {
-      return NextResponse.json(
-        { error: 'Only .docx files are allowed for security reasons.' },
-        { status: 400 }
-      )
+    try {
+      files.forEach((f) => assertAllowedDocumentFile(f))
+    } catch (e: any) {
+      return NextResponse.json({ error: e?.message ?? 'Invalid file type' }, { status: 400 })
     }
 
     // Parse timeline steps and validate
@@ -304,7 +276,23 @@ export async function POST(request: NextRequest) {
     }
 
     if (referenceFiles.length > 0) {
-      const savedRefFiles = await Promise.all(referenceFiles.map(refFile => saveFile(refFile)))
+      // Reference files keep the legacy behavior for now (stored path under uploads root would be better,
+      // but this feature request is about "document files", not reference files).
+      const savedRefFiles = await Promise.all(
+        referenceFiles.map(async (refFile) => {
+          // Store reference files under uploads as well to avoid public access
+          const saved = await saveUploadedFile({
+            file: refFile,
+            relativeDir: `documents/_references/${Date.now()}`,
+          })
+          return {
+            filePath: saved.storagePath,
+            fileName: saved.fileName,
+            fileSize: saved.fileSize,
+            mimeType: saved.mimeType,
+          }
+        })
+      )
       documentData.referenceFiles = {
         create: savedRefFiles.map(refData => ({
           fileName: refData.fileName,
@@ -312,21 +300,6 @@ export async function POST(request: NextRequest) {
           mimeType: refData.mimeType,
           filePath: refData.filePath
         }))
-      }
-    }
-
-    // Only create version if file is provided
-    if (file) {
-      const fileData = await saveFile(file)
-      documentData.versions = {
-        create: {
-          versionNumber: 1,
-          fileName: fileData.fileName,
-          fileSize: fileData.fileSize,
-          mimeType: fileData.mimeType,
-          filePath: fileData.filePath,
-          createdById: user.userId
-        }
       }
     }
 
@@ -368,13 +341,38 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // Set currentVersionId if a version was created
-    if (file && document.versions.length > 0) {
+    // Create initial revision bundle if files were provided
+    if (files.length > 0) {
+      const revision = await prisma.documentRevision.create({
+        data: {
+          documentId: document.id,
+          revisionNumber: 1,
+          createdById: user.userId,
+        },
+      })
+
+      const savedFiles = await Promise.all(
+        files.map(async (f, idx) => {
+          const saved = await saveUploadedFile({
+            file: f,
+            relativeDir: `documents/${document.id}/rev-1`,
+          })
+          return prisma.documentFile.create({
+            data: {
+              revisionId: revision.id,
+              fileName: saved.fileName,
+              fileSize: saved.fileSize,
+              mimeType: saved.mimeType,
+              storagePath: saved.storagePath,
+              isPrimary: idx === 0,
+            },
+          })
+        })
+      )
+
       await prisma.document.update({
         where: { id: document.id },
-        data: {
-          currentVersionId: document.versions[0].id
-        }
+        data: { currentRevisionId: revision.id },
       })
     }
 
