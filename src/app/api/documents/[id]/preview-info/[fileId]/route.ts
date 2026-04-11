@@ -64,6 +64,9 @@ export async function GET(
       return NextResponse.json({ error: 'Preview not available for this file type' }, { status: 400 })
     }
 
+    if (!storagePath) {
+      return NextResponse.json({ error: 'File path not found' }, { status: 404 })
+    }
     const inputAbs = getStoredFileAbsolutePath(storagePath)
     const uploadsRootAbs = getUploadsRootAbsolutePath()
     const { pdfAbs } = await ensureOfficePdfPreview({

@@ -129,10 +129,10 @@ export async function POST(
     if (existing.length > 0) {
       // Best effort: remove old rows and their files; keep the newly created annotation.
       await prisma.documentFileAnnotation.deleteMany({
-        where: { id: { in: existing.map(e => e.id) } },
+        where: { id: { in: existing.map((e: { id: string }) => e.id) } },
       })
       await Promise.all(
-        existing.map(async (ann) => {
+        existing.map(async (ann: { storagePath: string }) => {
           try {
             await deleteStoredFile(ann.storagePath)
           } catch (err) {

@@ -31,7 +31,7 @@ export function assertAllowedDocumentFile(file: File): { ext: AllowedDocumentExt
 }
 
 export function getUploadsRootAbsolutePath(): string {
-  return join(process.cwd(), UPLOADS_ROOT_DIRNAME)
+  return join(/*turbopackIgnore: true*/ process.cwd(), UPLOADS_ROOT_DIRNAME)
 }
 
 export async function ensureDirAbsolute(dirAbsolutePath: string): Promise<void> {
