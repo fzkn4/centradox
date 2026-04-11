@@ -78,6 +78,13 @@ export async function ensureOfficePdfPreview(params: {
   const tmpDirAbs = join(uploadsRootAbs, 'previews', 'tmp', crypto.randomUUID())
   await mkdir(tmpDirAbs, { recursive: true })
 
+  const ext = extname(inputAbs).toLowerCase()
+  if (ext === '.pdf') {
+    const bytes = await readFile(inputAbs)
+    await writeFile(pdfAbs, bytes)
+    return { pdfAbs }
+  }
+
   const inputBase = basename(inputAbs, extname(inputAbs))
   const expectedTmpPdfAbs = join(tmpDirAbs, `${inputBase}.pdf`)
 

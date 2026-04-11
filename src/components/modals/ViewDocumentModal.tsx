@@ -607,7 +607,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
       const fileMeta = targetFileId ? findFileMetaById(targetFileId) : null
       const effectiveFileName = fileMeta?.fileName ?? selectedFile?.fileName ?? ''
       const effectiveExt = getExt(effectiveFileName)
-      const isOfficePreview = effectiveExt === 'ppt' || effectiveExt === 'pptx' || effectiveExt === 'xls' || effectiveExt === 'xlsx'
+      const shouldPaginate = effectiveExt === 'ppt' || effectiveExt === 'pptx' || effectiveExt === 'xls' || effectiveExt === 'xlsx' || effectiveExt === 'pdf'
 
       if (isAnnotating) {
         setIsAnnotating(false)
@@ -616,7 +616,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
         void canvasRef.current?.clearCanvas()
       }
 
-      if (isOfficePreview && targetFileId) {
+      if (shouldPaginate && targetFileId) {
         const infoRes = await fetch(`/api/documents/${documentId}/preview-info/${targetFileId}`, {
           headers: { Authorization: `Bearer ${token}` },
         })
@@ -1765,7 +1765,7 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                       Annotations ({allAnnotations.length})
                     </button>
 
-                    {(previewType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || previewType?.startsWith('image/')) && canCompleteStep && (
+                    {(previewType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || previewType?.startsWith('image/') || previewType === 'application/pdf' || paginatedPreview) && canCompleteStep && (
                       <button
                         onClick={() => {
                           const newState = !isAnnotating
@@ -1875,13 +1875,13 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
                 )}
 
                 <div className="flex-1 w-full flex items-center justify-center bg-gray-100 overflow-auto relative">
-                  {previewType === 'application/pdf' ? (
+                  {(previewType === 'application/pdf' && !paginatedPreview) ? (
                     <object data={previewUrl} type="application/pdf" className="w-full h-full shadow-sm">
                       <iframe src={previewUrl} className="w-full h-full border-0">
                         <p>This browser does not support PDFs. Please download the PDF to view it.</p>
                       </iframe>
                     </object>
-                  ) : (previewType?.startsWith('image/') || previewType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') ? (
+                  ) : (previewType?.startsWith('image/') || previewType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || (previewType === 'application/pdf' && paginatedPreview)) ? (
                     <div style={{ position: 'relative', width: '100%', height: '100%', border: '1px solid #ddd', backgroundColor: '#f3f4f6', overflowY: 'auto', overflowX: 'auto' }}>
                       <div 
                         ref={wrapperRef} 

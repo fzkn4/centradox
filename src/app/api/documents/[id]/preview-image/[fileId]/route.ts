@@ -18,7 +18,7 @@ async function getUserFromRequest(request: NextRequest) {
 }
 
 function isPreviewableOfficeExt(ext: string): boolean {
-  return ext === 'ppt' || ext === 'pptx' || ext === 'xls' || ext === 'xlsx'
+  return ext === 'ppt' || ext === 'pptx' || ext === 'xls' || ext === 'xlsx' || ext === 'pdf'
 }
 
 export async function GET(
