@@ -814,6 +814,15 @@ export function ViewDocumentModal({ isOpen, onClose, documentId }: ViewDocumentM
     })
   }, [activeTab, actionAnnotations, ensureAnnotationPreview])
 
+  useEffect(() => {
+    if (activeTab !== 'workflow') return
+    const timelineAnns = allAnnotations.filter(a => a.workflowStepId)
+    if (timelineAnns.length === 0) return
+    timelineAnns.forEach((a) => {
+      void ensureAnnotationPreview(a.id, a.fileId)
+    })
+  }, [activeTab, allAnnotations, ensureAnnotationPreview])
+
   const handleDownloadAnnotation = useCallback(
     async (annotationId: string, fileId: string, fileName: string) => {
       if (!documentId) return
